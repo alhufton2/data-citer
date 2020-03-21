@@ -1,14 +1,20 @@
 #!/opt/local/bin/perl
 
+# use the shebang line below when running at bluehost
 #   !/usr/bin/perlml
+
 use strict;
 use warnings;
 use utf8;
 
+# Load CGI webform package and create a handler
 use CGI::Simple;
 my $q = CGI::Simple->new;
 $q->charset('utf-8');      # set the charset
+$CGI::Simple::POST_MAX=1024 * 100;  # max 100K posts
+$CGI::Simple::DISABLE_UPLOADS = 1;  # no uploads
 
+# Load other packages
 use Encode;
 use LWP::UserAgent;
 use HTML::TokeParser::Simple;
@@ -18,42 +24,46 @@ use Text::Names qw(parseName);
 use open qw( :encoding(UTF-8) :std );
 open(STDERR, ">&STDOUT");
 
-$CGI::Simple::POST_MAX=1024 * 100;  # max 100K posts
-$CGI::Simple::DISABLE_UPLOADS = 1;  # no uploads
-
+# Read in any CGI parameters and clean whitespace
 my $tool_url = $q->url();
-( my $doi  = $q->param('DOI')    ) =~ s/\s+//g;
-( my $acc  = $q->param('ACC')    ) =~ s/\s+//g;
-( my $repo = $q->param('repoRF') ) =~ s/\s+//g;
-( my $prov = $q->param('PROV')   ) =~ s/\s+//g;
+my $doi  = $q->param('DOI');
+$doi =~ s/\s+//g if $doi;
+my $acc  = $q->param('ACC');
+$acc =~ s/\s+//g if $acc;
+my $repo = $q->param('repoRF');
+$repo =~ s/\s+//g if $repo;
+my $prov = $q->param('PROV');
+$prov =~ s/\s+//g if $prov;
+my $prefer_schema = $q->param('prefer_schema');
+
+# Set various variables
 my $cut = 5;       # defines length at which author lists are truncated with et al. 
 my $year = "????"; # defines default text for 'year' field
 my $contact_email = 'contact@alhufton.com';
+my $timeout = 30;
 my $json = JSON::PP->new->pretty;  # creates a json parsing object
 
 # Define core metadata fields to be filled
-my ($title, $authors, $date, $publisher, $id);
+my ($title, $date, $publisher, $id);
 my ($source_url, $source_metadata, $source_name);
+my @authors;
+my @warnings;
 
 binmode(STDOUT, ":utf8");
 print "Content-Type: text/html; charset=utf-8\n\n"; 
 
+# Main body 
 start_html("Data Citation Formatter");
 print_header();
+$| = 1; # forces a print flush as the prompt prints, so that user sees a more complete html page while waiting for work to finish
 print_prompt();
+$| = 0;
 do_work();
 print_tail();
 
 exit;
 
 sub do_work {
-    
-    #print "<h2>Here are the current settings in this form</h2>\n";
-    #for my $key ($q->param()) {
-    #    print "<strong>$key</strong> -> ";
-	#    my @values = $q->param($key);
-	#    print join(", ",@values),"<br>\n";
-	#}
 
     # If user provided an accession number & repo prefix
     if ($acc && $repo) {
@@ -64,16 +74,7 @@ sub do_work {
 
         # Try to get information from the HTML
         &get_html_metadata( $data_url ); 
-        
-        if ($date) {
-            my $date_parser = Date::Parse::Lite->new();
-            $date_parser->parse($date);
- 
-            if ( $date_parser->parsed() ) {
-                $year = $date_parser->year();
-            }
-        }
-        
+                
         # Get publisher name from identifiers.org API if it was in the HTML
         &get_publisher_i_org() unless $publisher; 
 
@@ -81,12 +82,11 @@ sub do_work {
     } elsif ( $doi ) {
             # clean & check for a valid DOI
             $doi =~ s/^doi:[\s]*//;
-            $doi =~ s/^https*:\/\/doi\.org\///;
-            $doi =~ s/^https*:\/\/dx\.doi\.org\///;
-            unless ( $doi =~ /^10\./ ) { print "Invalid DOI provided: $doi.\n\n"; exit; }
+            $doi =~ s/^https*:\/\/(dx\.)*doi\.org\///;
+            unless ( $doi =~ /^10\./ ) { print "Invalid DOI provided: $doi.\n\n"; &print_tail; exit; }
             
             $id = "https://doi.org/$doi"; 
-            &get_datacite_metadata( $doi );
+            &get_doi_metadata;
     } else {
         return;
     }
@@ -102,20 +102,17 @@ sub do_work {
     
     # Create a details tab
     if ( $source_metadata ) {
-        print <<EOF;
-    
-<div class="wrap-collabsible">
-    <input id="collapsible" class="toggle" type="checkbox">
-    <label for="collapsible" class="lbl-toggle">Details</label>
-    <div class="collapsible-content">
-        <div class="content-inner">
-            <p>Metadata obtained from <a href=\"$source_url\">$source_url</a></p>
-            <p><pre>$source_metadata</pre></p>
-        </div>
-    </div>
-</div>
-
-EOF
+        print "<div class=\"wrap-collabsible\">\n";
+        print "<input id=\"collapsible\" class=\"toggle\" type=\"checkbox\">\n";
+        print "<label for=\"collapsible\" class=\"lbl-toggle\">Details</label>\n";
+        print "<div class=\"collapsible-content\">\n";
+        print "<div class=\"content-inner\">\n";
+        print "<p>Metadata obtained from <a href=\"$source_url\">$source_url</a></p>\n";
+        foreach my $warning (@warnings) {
+            print "<p>WARNING: $warning</p>\n";
+        }
+        print "<p><pre>$source_metadata</pre></p>\n";
+        print "</div></div></div>\n";
     }        
 }
 
@@ -124,13 +121,13 @@ sub build_url_acc {
     my $url;
     if ($prov) { $url = "https://identifiers.org/$prov/$repo:$acc" }
     else { $url = "https://identifiers.org/$repo:$acc"}
-    print STDERR "url: $url\n";
     return $url;
 }
 
+# Attempts to retrieve the publisher name from the identifiers.org API
 sub get_publisher_i_org {
     my $ua = LWP::UserAgent->new;
-    $ua->timeout(60);
+    $ua->timeout($timeout);
     my $namespaceID;
    
     my $response = $ua->get("https://registry.api.identifiers.org/restApi/namespaces/search/findByPrefix?prefix=$repo");
@@ -141,17 +138,17 @@ sub get_publisher_i_org {
             $namespaceID = $1; 
         }
     } else {
-        print $response->status_line; exit;
+        print $response->status_line; &print_tail; exit;
     }
+    
+    # If a provider was declared, try to get the more specific publisher name
     if ($prov) {
-        #print "trying https://registry.api.identifiers.org/restApi/resources/search/findByNamespaceIdAndProviderCode?namespaceId=$namespaceID&providerCode=$prov\n\n";
         $response = $ua->get("https://registry.api.identifiers.org/restApi/resources/search/findByNamespaceIdAndProviderCode?namespaceId=$namespaceID&providerCode=$prov");
         if ($response->is_success) {
-            #print $response->content;
             my $metadata = decode_json $response->content;
             $publisher = $metadata->{_embedded}->{resources}->[0]->{name};
         } else {
-            print $response->status_line; exit;
+            print $response->status_line; &print_tail; exit;
         }
     }
     unless ($source_name) { $source_name = 'identifiers.org API'; }
@@ -160,147 +157,142 @@ sub get_publisher_i_org {
 
    
 # Get DataCite metadata from a provided DOI
-sub get_datacite_metadata {
-    my $datacite_doi = shift;
+sub get_doi_metadata {
+
     my $ua = LWP::UserAgent->new;
-    $ua->timeout(30);
-    my $agency_url = "https://api.crossref.org/works/$datacite_doi/agency";
-    $source_url = "https://data.datacite.org/application/vnd.datacite.datacite+json/$datacite_doi"; 
+    $ua->timeout($timeout);
+    my $agency;
    
-    # Is this a DataCite DOI?
-    my $response = $ua->get($agency_url);
+    # Get DOI agency
+    my $response = $ua->get("https://api.crossref.org/works/$doi/agency");
     if ($response->is_success) {
-        my $agency_check = $json->decode($response->content);
-        unless ( $agency_check->{message}->{agency}->{id} eq 'datacite' ) {
-            print "\n\nProvided DOI is not registered with DataCite.\n\n"; exit;
-        }
+        my $agency_message = $json->decode($response->content);
+        $agency = $agency_message->{message}->{agency}->{id};
     } else {
-        print $response->status_line; exit;
+        print $response->status_line; &fail;
     }
     
-    # Ok, get the DataCite metadata
-    $response = $ua->get($source_url);
-    if ($response->is_success) {
-        #print $response->content;
-        my $metadata = decode_json $response->content;
-        my @authors; 
-        foreach my $element ( @{$metadata->{creators}} ) {
-            unless ($element->{nameType} eq 'Organizational') {
-                $element->{name} =~ s/\(.*?\)//g; # Delete anything within parentheses (hack to deal with some pathological DataCite examples)
-                push @authors, &name_parser_punc($element->{name});
+    if ( $prefer_schema || ( $agency ne 'datacite' && $agency ne 'crossref' ) ) {
+        &get_html_metadata($id);
+    }
+    
+    unless ( $source_name ) {
+        if ( $agency eq 'datacite' ) {
+    
+            # Get DataCite metadata
+            $source_url = "https://data.datacite.org/application/vnd.datacite.datacite+json/$doi"; 
+            $response = $ua->get($source_url);
+            if ($response->is_success) {
+        
+                my $metadata = decode_json $response->content;
+                foreach my $element ( @{$metadata->{creators}} ) {
+                    unless ($element->{nameType} eq 'Organizational') {
+                        # Delete anything within parentheses (hack to deal with some pathological DataCite examples)
+                        $element->{name} =~ s/\(.*?\)//g; 
+                        push @authors, &name_parser_punc($element->{name});
+                    } else {
+                        push @authors, $element->{name};
+                    }
+                }
+        
+                $publisher       = $metadata->{publisher};
+                $title           = $metadata->{titles}->[0]->{title};
+                $year            = $metadata->{publicationYear};
+                $source_name     = 'DataCite';
+                $source_metadata = $json->encode($metadata);
             } else {
-                push @authors, $element->{name};
+                print $response->status_line; &fail;
+            }
+        } elsif ( $agency eq 'crossref' ) {
+            
+            # Get Crossref metadata
+            $source_url = "https://api.crossref.org/works/$doi";
+            $response = $ua->get($source_url);
+            if ($response->is_success) {
+        
+                my $metadata = decode_json $response->content;
+                unless ( $metadata->{message}->{type} eq 'dataset' ) {
+                    print "<p>Error: Digital object is not registered at Crossref as a dataset ($metadata->{message}->{type}).</p>";
+                    &print_tail; exit;
+                }
+                
+                foreach my $element ( @{$metadata->{message}->{author}} ) {
+                    if ( $element->{family} && $element->{given} ) {
+                        my $name = $element->{family} . ", " . $element->{given};
+                        push @authors, &name_parser_punc($name);
+                    } else {
+                        push @authors, $element->{name};
+                    }
+                }
+        
+                $publisher       = $metadata->{message}->{publisher};
+                $title           = $metadata->{message}->{title}->[0];
+                $year            = $metadata->{message}->{issued}->{'date-parts'}->[0]->[0];
+                $source_name     = 'Crossref';
+                $source_metadata = $json->encode($metadata);
+            } else {
+                print $response->status_line; &fail;
             }
         }
-
-        $authors         = \@authors;
-        $publisher       = $metadata->{publisher};
-        $title           = $metadata->{titles}->[0]->{title};
-        $year            = $metadata->{publicationYear};
-        $source_name     = 'DataCite';
-        $source_metadata = $json->encode($metadata);
-    } else {
-        print $response->status_line; &fail; exit;
-    }
+    }   
 }
 
 # Get metadata from a target URL
 sub get_html_metadata {
     my $url = shift;
     
-    #print "<p>Trying to obtain metadata from $url</p>\n";
-    
     my $ua = LWP::UserAgent->new;
-    $ua->timeout(10);
+    $ua->timeout($timeout);
     my $response = $ua->get($url);
-    #print $response->as_string;
     my $html = $response->decoded_content;
-    my @authors;
     
     if ($response->is_success) {
         
         my $p = HTML::TokeParser::Simple->new( \$html );
-     
         my $i = 0; 
+        my $use_metadata;
+        
         while ( my $token = $p->get_token ) {
             # Identify linked data
             if ( $token->is_start_tag('script') && $token->get_attr('type') && $token->get_attr('type') eq 'application/ld+json') {
                 my $script = $p->get_token;
-                my $metadata = $json->decode($script->as_is);
-                my $mtype = lc $metadata->{'@type'}; 
+                my $metadata = $json->decode($script->as_is); 
                 
-                # This needs to be rewritten to allow for cases where any or all 
-                # properties are arrays (see BCO-DMO), and to check the mainEntity
-                # if the top level fails. This will also us to also remove the
-                # special OmicsDI parsing. There is little value in pulling the 
-                # publisher name from citation anyways, so the special citation case
-                # can be eliminated. Probably good to have separate subroutines 
-                # for grabbing single properties (check that property exists, check
-                # for array, then pull and return properly).
-                
-                if ( $mtype eq 'dataset' || $mtype eq 'datarecord' ) {
+                if ( lc $metadata->{'@type'} eq 'dataset' || lc $metadata->{'@type'} eq 'datarecord' ) {
+                    unless ($i > 0)  { $use_metadata = $metadata }
                     ++$i;
-
-                    if ( $metadata->{'name'}                ) { $title = $metadata->{'name'} }
-                    if ( $metadata->{'publisher'}->{'name'} ) { $publisher = $metadata->{'publisher'}->{'name'} }
-                    if ( $metadata->{'datePublished'}       ) { $date = $metadata->{'datePublished'} }
                     
-                    if ( $metadata->{creator} ) {
-                        foreach my $element ( @{$metadata->{creator}} ) {
-                            my $name; 
-                            if ( $element->{familyName} && $element->{givenName} ) {
-                                $name = $element->{familyName} . ", " . $element->{givenName};
-                            } else {
-                                $name = $element->{name} 
-                            }
-                            $name = &name_parser_punc($name) if ($element->{'@type'} eq 'Person');
-                            push @authors, $name;
-                        }
-                    }
-                    $authors = \@authors;
-                    
-                    $source_name = 'schema.org';
-                    $source_url  = $url;
-                    $source_metadata = $json->encode($metadata);
-
-                # special parsing for OmicsDI
-                } elsif ( $mtype eq 'itempage' ) {
-                    $mtype = lc $metadata->{mainEntity}->{'@type'};
-                    if ( $mtype eq 'dataset' || $mtype eq 'datarecord' ) {
-                    
-                        ++$i;
-
-                        if ( $metadata->{mainEntity}->{'name'} )                            { $title     = $metadata->{mainEntity}->{'name'} }
-                        if ( $metadata->{mainEntity}->{citation}->{'publisher'}->{'name'} ) { $publisher = $metadata->{mainEntity}->{citation}->{'publisher'}->{'name'} }
-                        if ( $metadata->{mainEntity}->{'datePublished'} )                   { $date      = $metadata->{mainEntity}->{'datePublished'} }
-                    
-                        if ( $metadata->{mainEntity}->{creator} ) {
-                            foreach my $element ( @{$metadata->{mainEntity}->{creator}} ) {
-                                my $name; 
-                                if ( $element->{familyName} && $element->{givenName} ) {
-                                    $name = $element->{familyName} . ", " . $element->{givenName};
-                                } else {
-                                    $name = $element->{name} 
-                                }
-                                $name = &name_parser_punc($name) if ($element->{'@type'} eq 'Person');
-                                push @authors, $name;
-                            }
-                        }
-                        $authors = \@authors;
-                    
-                        $source_name = 'schema.org via OmicsDI';
-                        $source_url  = $url;
-                        $source_metadata = $json->encode($metadata);
-                    }
+                } elsif ( $metadata->{mainEntity} && (lc $metadata->{mainEntity}->{'@type'} eq 'dataset' || lc $metadata->{mainEntity}->{'@type'} eq 'datarecord' )) {
+                    unless ($i > 0)  { $use_metadata = $metadata->{mainEntity}; }
+                    ++$i;
                 }
             }
+        }        
+        
+        if ($i > 0) {
+            &parse_Schema_dataset( $use_metadata );
+            $source_name = 'schema.org';
+            $source_url  = $url;
+            $source_metadata = $json->encode($use_metadata);
         }
-        if ($i > 1) { print "<p><strong>Warning:</strong> ld+json metadata found for more than one dataset.</p>\n";}
+        if ($i > 1) { 
+            push @warnings, "Schema.org metadata found for more than one DataSet or DataRecord. Only the first was used.";
+        }
+        if ($date) {
+            my $date_parser = Date::Parse::Lite->new();
+            $date_parser->parse($date);
+ 
+            if ( $date_parser->parsed() ) {
+                $year = $date_parser->year();
+            } else { 
+                $year = $date;
+                push @warnings, "Date ($date) was not successfully parsed.";
+            }
+        }
         
     } else {
         print "<p>Invalid URL: $url</br>" . $response->status_line . "</p>\n";
         &fail;
-        exit;
     }   
 }
 
@@ -317,6 +309,72 @@ sub name_parser_punc {
     return $formatted_name; 
 }
 
+# Parses a provided Schema.org DataSet or DataRecord object
+sub parse_Schema_dataset {
+    my $metadata = shift;
+    
+    # These need to be checked for arrays
+    $title     = &assign( $metadata, 'name' );
+    $publisher = &assign2( $metadata, 'publisher', 'name' );
+    $date      = &assign( $metadata, 'datePublished' );
+    
+    # probably an array but not always
+    if ( $metadata->{creator} ) {
+        
+        # Check if it is an array, if not create a single element array
+        my @temp_array;
+        if ( ref $metadata->{creator} eq ref [] ) {
+            @temp_array = @{$metadata->{creator}};
+        } else {
+            push @temp_array, $metadata->{creator};
+        }
+        
+        # Ok now parse all the names in the array
+        foreach my $element ( @temp_array ) {
+            my $name; 
+            if ( $element->{familyName} && $element->{givenName} ) {
+                $name = $element->{familyName} . ", " . $element->{givenName};
+            } else {
+                $name = $element->{name} 
+            }
+            $name = &name_parser_punc($name) if ($element->{'@type'} eq 'Person');
+            push @authors, $name;
+        }
+    } 
+}
+
+sub assign {
+    my $metadata = shift;
+    my $property = shift; 
+    
+    if ( $metadata->{$property} ) {
+
+        return $metadata->{$property} if ( ref $metadata->{$property} eq '' ); # check that there isn't another reference layer
+        if ( $metadata->{$property}->[0] ) {
+            push @warnings, "Array encountered for property, '$property', expected to have unique value.";
+            return $metadata->{$property}->[0] if ( ref $metadata->{$property}->[0] eq '' );
+        }
+    }
+    return undef;
+}
+
+sub assign2 {
+    my $metadata = shift;
+    my $property = shift; 
+    my $property2 = shift;
+    
+    if ( $metadata->{$property} ) {
+        if ( ref $metadata->{$property} eq ref []  ) {
+            push @warnings, "Array encountered for property, '$property', expected to have unique value.";
+            return $metadata->{$property}->[0]->{$property2} if ( $metadata->{$property}->[0]->{$property2} );
+        } else {
+            return $metadata->{$property}->{$property2} if ( $metadata->{$property}->{$property2} );
+        }
+    }
+    return undef;
+}
+    
+
 # Format a citation string according to the Nature Research style
 sub citation_nature {
     
@@ -324,22 +382,21 @@ sub citation_nature {
     
     # Define and check for required fields
     unless ($publisher && $id && $year) {
-        &fail();
-        return;
+        &fail;
     }
     
     # Print a standard citation
     my $author_line = "";
  
-    if ( $authors ) {
-        my $k = @{$authors}; 
+    if ( @authors ) {
+        my $k = @authors; 
         if ($k > 0 ) {
             if ($k >= $cut) {
-                $author_line = $authors->[0] . " et al."
+                $author_line = $authors[0] . " et al."
             } else {
                 my $i = 0;
                 my $connect = ", ";
-                foreach my $author ( @{$authors} ) {
+                foreach my $author ( @authors ) {
                     ++$i; 
                     if ($i == $k - 1) { $connect = " & "; }
                     if ($i == $k) { $connect = ""; }
@@ -385,6 +442,10 @@ body {
   line-height: 0px;
   text-align: left;
   font-size: 18px;
+}
+
+.header a {
+  text-decoration: none;
 }
 
 /* Style the intro */
@@ -514,14 +575,11 @@ EOF
 }
 
 sub print_header {
-    print "<div class=\"header\"><h1>Data Citation Formatter</h1></div>\n";
+    print "<div class=\"header\"><h1><a href=\"$tool_url\">Data Citation Formatter</a></h1></div>\n";
     print "<div class=\"intro\">\n";
     unless (($acc && $repo) || $doi ) {
         &print_intro;
-    } else {
-        print "<p>Search for citation information for another dataset.</p>
-        <p><a href=\"$tool_url\">Clear form</a></p>\n";
-    }
+    } 
     print "</div>\n";
 }
 
@@ -530,7 +588,7 @@ sub print_tail {
     
 <div>&nbsp;</div>    
 <div class="footer">
-<p><a href="https://alhufton.com/">Home</a> | <a href=\"mailto:$contact_email\">Contact</a> | GitHub </p>
+<p><a href="https://alhufton.com/">Home</a> | <a href="mailto:$contact_email">Contact</a> | <a href="https://github.com/alhufton2/data-citer">GitHub</a></p>
 <p>© 2020 Andrew Lee Hufton</p>
 </div>
 </body>
@@ -546,7 +604,7 @@ sub fail {
 <p>Citation metadata not found for <a href="$id">$id</a>.</p>
     
 <p>Please note that this tool currently only supports citation metadata provided 
-through DataCite (for DOIs) and Schema.org (for accession ids). Do you know of 
+through DataCite and Schema.org. Do you know of 
 a data repository using another standard to provide machine-readable citation 
 metadata? <a href="mailto:$contact_email">Email me an example</a>.</p>
     
@@ -561,28 +619,33 @@ exit;
 sub print_intro {
     print <<EOF;
 
-<p>This webform attempts to construct a formatted data citation from a DataCite 
-DOI or an identifiers.org registered accession number. Citation information for 
-DOIs is obtained from the <a href="https://support.datacite.org/docs/api">DataCite API</a>. 
-For accession numbers, an identifiers.org URL is constructed, resolved to the 
-target webpage, and then the page is searched for schema.org metadata tags. The 
-latter is poorly tested and not likely to work in most cases. 
-If you know of identifiers.org data records with good, machine-readable citation 
-metadata, please <a href="mailto:$contact_email">let me know</a>. Formatting follows
-the Nature Research style. For more information on
-scholarly data citation standards please see 
+<p>This webform attempts to construct a formatted data citation from a 
+DOI or an identifiers.org registered accession number. Citation information is 
+obtained from the <a href="https://datacite.org/">DataCite</a> 
+or <a href="https://www.crossref.org/">Crossref</a> APIs, 
+or, failing that, by trying to search the target page for <a href="https://schema.org/">
+Schema.org</a> metadata. For accession numbers, a URL is constructed via 
+identifiers.org, and then the target page is searched for Schema.org metadata. 
+A repository name is pulled from the 
+<a href="https://docs.identifiers.org/articles/api.html#registry">identifiers.org 
+registry API</a> if not found on the target page. Only Schema.org metadata in 
+JSON-LD is currently supported. If you know of identifiers.org data records with 
+good, machine-readable citation metadata, please <a href="mailto:$contact_email">let me know</a>. Formatting follows
+the Nature Research style. For more information on scholarly data citation standards please see 
 <a href="https://doi.org/10.1038/sdata.2018.29">Wimalaratne et al.</a>, 
 <a href="https://doi.org/10.1038/s41597-019-0031-8">Fenner et al.</a>, 
-and <a href="https://doi.org/10.1038/sdata.2018.259">Cousijn et al.</a> Try these 
-examples: <a href="$tool_url?DOI=&repoRF=pride.project&ACC=PXD001416&PROV=omicsdi">PXD001416 via OmicsDI</a>,
-<a href="$tool_url?DOI=https%3A%2F%2Fdoi.org%2F10.14284%2F350&repoRF=&ACC=&PROV=">https://doi.org/10.14284/350</a>, 
-<a href="$tool_url?DOI=&repoRF=pdb&ACC=2gc4&PROV=pdbe">2gc4 via PDBe</a>.
+and <a href="https://doi.org/10.1038/sdata.2018.259">Cousijn et al.</a></p> 
+<p><strong>Try these examples:</strong> <a href="$tool_url?DOI=&repoRF=pride.project&ACC=PXD001416&PROV=omicsdi">PXD001416 via OmicsDI</a>,
+<a href="$tool_url?DOI=https%3A%2F%2Fdoi.org%2F10.14284%2F350&repoRF=&ACC=&PROV=">https://doi.org/10.14284/350</a> (DataCite), 
+<a href="$tool_url?DOI=10.1575%2F1912%2Fbco-dmo.804502.1&repoRF=&ACC=&PROV="> https://doi.org/10.1575/1912/bco-dmo.804502.1</a> (Crossref or Schema.org), 
+<a href="$tool_url?DOI=10.1594%2FPANGAEA.904761&prefer_schema=true&repoRF=&ACC=&PROV="> https://doi.org/10.1594/PANGAEA.904761</a> (DataCite or Schema.org),  
+<a href="$tool_url?DOI=&repoRF=pdb&ACC=2gc4&PROV=pdbe"> 2gc4 via PDBe</a>.
 </p> 
         
 <p><strong>Note:</strong> this is a personal project, and not a service provided 
 by <a href="https://www.nature.com/nature-research">Nature Research</a> or 
 <em><a href="https://nature.com/sdata/">Scientific Data</a></em>.</p>
-<p><strong>Latest updates</strong>: Schema.org support and a new Details section.</p>
+<p><strong>Latest updates</strong>: Schema.org & Crossref support, plus a new Details section.</p>
 
 EOF
 
@@ -598,12 +661,19 @@ sub print_prompt {
     
 EOF
 
-    if ($doi) { print "<input type=\"text\" name=\"DOI\" value=\"$doi\"><br>\n";}
-    else { print "<input type=\"text\" name=\"DOI\"><br>\n"; }
+    if ($doi) { print "<input type=\"text\" name=\"DOI\" value=\"$doi\">\n";}
+    else { print "<input type=\"text\" name=\"DOI\">\n"; }
+    
+    if ($prefer_schema) {
+        print "<input style=\"display:inline\" type=\"checkbox\" id=\"prefer_schema\" name=\"prefer_schema\" value=\"true\" checked=\"checked\">";
+    } else {
+        print "<input style=\"display:inline\" type=\"checkbox\" id=\"prefer_schema\" name=\"prefer_schema\" value=\"true\">";
+    }
+    print "<label for=\"prefer_schema\"> Prefer Schema.org</label>\n"; 
         
     print <<EOF;
     
-    Dataset must be registered with <a href="https://datacite.org/">DataCite</a>
+    <p>If box is checked, Schema.org metadata will be used when available instead of DataCite or Crossref.</p>
   </div> 
   <div class="column" style="background-color:#bbb;">
     <strong>Or, enter a repository prefix and a valid accession identifier.</strong></br>
@@ -624,7 +694,9 @@ EOF
 	    
   </div>
 </div>
-<div class="button"><input type="submit" value="Get data citation" style="font-size : 20px;"></div>
+<div class="button">
+<input type="submit" value="Get data citation" style="font-size : 20px;">
+</div>
 </form>
 	
 EOF
