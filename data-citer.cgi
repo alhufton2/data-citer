@@ -429,48 +429,81 @@ sub start_html {
 }
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
-  color: #3f3f3f;
+  font-family: Verdana, Geneva, sans-serif;;
+  color: #D3D3D3;
+  background-color: #212121;
+  max-width:1020px;
+  margin: auto;
+  width: 100vw;
+  padding: 10px;
+
+}
+
+a, a:visited {
+    color: white;
+    text-decoration: none;
+}
+
+a:hover {
+    color: lightblue;
 }
 
 /* Style the header */
 .header {
-  color: #1e73be;
-  background-color: white;
-  padding: 10px;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #DEB887;
+  background-color: #212121;
+  padding: 5px;
   margin: 0px;
   line-height: 0px;
   text-align: left;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .header a {
   text-decoration: none;
+  color: #DEB887;
 }
 
 /* Style the intro */
 .intro {
   padding: 10px;
-  text-align: left;
+  text-align: justify;
+  font-size: 14px;
 }
 
 /* Style the results */
 .results {
-  background-color: #ADD8E6;
   padding: 10px;
   text-align: left;
 }
 
 .results h3, .results h2, .results h4 {
-  color: #1e73be;
+  color: #70db70;
+  font-weight: normal;
+  margin-top: 0;
+}
+
+.button {
+  padding: 10px;
 }
 
 /* Create three equal columns that floats next to each other */
+.row {
+  border-top: 1px solid;
+  border-bottom: 1px solid;
+}
+
 .column {
   float: left;
   width: 50\%;
   padding: 10px;
-  height: 140px;
+}
+
+.column h2, h3, h4 {
+  margin-top: 0; 
+  color: #70db70;
+  font-weight: normal;
 }
 
 /* Clear floats after the columns */
@@ -482,10 +515,9 @@ body {
 
 /* Style the footer */
 .footer {
-  color: #3f3f3f;
-  background-color: #eaeaea;
   padding: 10px;
   text-align: right;
+  border-top: 1px solid;
 }
 
 /* Responsive layout - makes the three columns stack on top of each other instead of next to each other */
@@ -512,8 +544,8 @@ input[type='checkbox'] {
 
   padding: 1rem;
 
-  color: #A77B0E;
-  background: #FAE042;
+  background: #606060;
+  color: #D3D3D3; 
 
   cursor: pointer;
 
@@ -522,7 +554,7 @@ input[type='checkbox'] {
 }
 
 .lbl-toggle:hover {
-  color: #7C5A0B;
+  color: #66ff66;
 }
 
 .lbl-toggle::before {
@@ -559,7 +591,8 @@ input[type='checkbox'] {
 }
 
 .collapsible-content .content-inner {
-  background: rgba(250, 224, 66, .2);
+  background: #4d3900;
+  color: #fff2cc;
   border-bottom: 1px solid rgba(250, 224, 66, .45);
   border-bottom-left-radius: 7px;
   border-bottom-right-radius: 7px;
@@ -620,22 +653,21 @@ sub print_intro {
     print <<EOF;
 
 <p>This webform attempts to construct a formatted data citation from a 
-DOI or an identifiers.org registered accession number. Citation information is 
+DOI or an <a href="identifiers.org/">identifiers.org</a> registered accession number. Citation information is 
 obtained from the <a href="https://datacite.org/">DataCite</a> 
 or <a href="https://www.crossref.org/">Crossref</a> APIs, 
 or, failing that, by trying to search the target page for <a href="https://schema.org/">
-Schema.org</a> metadata. For accession numbers, a URL is constructed via 
-identifiers.org, and then the target page is searched for Schema.org metadata. 
-A repository name is pulled from the 
+Schema.org</a> metadata. Only Schema.org metadata in JSON-LD is currently 
+supported. For identifiers.org datasets, a repository name is obtained from the 
 <a href="https://docs.identifiers.org/articles/api.html#registry">identifiers.org 
-registry API</a> if not found on the target page. Only Schema.org metadata in 
-JSON-LD is currently supported. If you know of identifiers.org data records with 
-good, machine-readable citation metadata, please <a href="mailto:$contact_email">let me know</a>. Formatting follows
-the Nature Research style. For more information on scholarly data citation standards please see 
+registry API</a> if not found on the target page.  If you know of data records with 
+good, machine-readable citation metadata in other formats, please 
+<a href="mailto:$contact_email">let me know</a>. Formatting follows the Nature 
+Research style. For more information on scholarly data citation standards please see 
 <a href="https://doi.org/10.1038/sdata.2018.29">Wimalaratne et al.</a>, 
 <a href="https://doi.org/10.1038/s41597-019-0031-8">Fenner et al.</a>, 
 and <a href="https://doi.org/10.1038/sdata.2018.259">Cousijn et al.</a></p> 
-<p><strong>Try these examples:</strong> <a href="$tool_url?DOI=&repoRF=pride.project&ACC=PXD001416&PROV=omicsdi">PXD001416 via OmicsDI</a>,
+<p style="text-align:left"><strong>Try these examples:</strong> <a href="$tool_url?DOI=&repoRF=pride.project&ACC=PXD001416&PROV=omicsdi">PXD001416 via OmicsDI</a>,
 <a href="$tool_url?DOI=https%3A%2F%2Fdoi.org%2F10.14284%2F350&repoRF=&ACC=&PROV=">https://doi.org/10.14284/350</a> (DataCite), 
 <a href="$tool_url?DOI=10.1575%2F1912%2Fbco-dmo.804502.1&repoRF=&ACC=&PROV="> https://doi.org/10.1575/1912/bco-dmo.804502.1</a> (Crossref or Schema.org), 
 <a href="$tool_url?DOI=10.1594%2FPANGAEA.904761&prefer_schema=true&repoRF=&ACC=&PROV="> https://doi.org/10.1594/PANGAEA.904761</a> (DataCite or Schema.org),  
@@ -645,7 +677,7 @@ and <a href="https://doi.org/10.1038/sdata.2018.259">Cousijn et al.</a></p>
 <p><strong>Note:</strong> this is a personal project, and not a service provided 
 by <a href="https://www.nature.com/nature-research">Nature Research</a> or 
 <em><a href="https://nature.com/sdata/">Scientific Data</a></em>.</p>
-<p><strong>Latest updates</strong>: Schema.org & Crossref support, plus a new Details section.</p>
+<p><strong>Latest updates</strong>: New dark theme. Also, schema.org & Crossref support, plus a new 'Details' section to show the raw JSON for successful metadata hits.</p>
 
 EOF
 
@@ -656,13 +688,13 @@ sub print_prompt {
 
 <form> 
 <div class="row">
-  <div class="column" style="background-color:#aaa;">
-    <strong>Enter a dataset DOI</strong><br>
+  <div class="column">
+    <h4>Enter a dataset DOI</h4>
     
 EOF
 
-    if ($doi) { print "<input type=\"text\" name=\"DOI\" value=\"$doi\">\n";}
-    else { print "<input type=\"text\" name=\"DOI\">\n"; }
+    if ($doi) { print "<input type=\"text\" name=\"DOI\" value=\"$doi\" size=\"30\">\n";}
+    else { print "<input type=\"text\" name=\"DOI\" size=\"30\">\n"; }
     
     if ($prefer_schema) {
         print "<input style=\"display:inline\" type=\"checkbox\" id=\"prefer_schema\" name=\"prefer_schema\" value=\"true\" checked=\"checked\">";
@@ -675,22 +707,23 @@ EOF
     
     <p>If box is checked, Schema.org metadata will be used when available instead of DataCite or Crossref.</p>
   </div> 
-  <div class="column" style="background-color:#bbb;">
-    <strong>Or, enter a repository prefix and a valid accession identifier.</strong></br>
-	See <a href="https://n2t.net/e/cdl_ebi_prefixes.yaml">here</a> for supported prefixes and providers</br>
-	
+  <div class="column">
+    <h4>Or, enter an identifiers.org prefix and accession ID</h4>
+    <table>
 EOF
 	
-	if ($repo) { print "Prefix:&nbsp;<input type=\"text\" name=\"repoRF\" value=\"$repo\"></br>"; }
-	else { print "Prefix:&nbsp;<input type=\"text\" name=\"repoRF\"></br>"; }
+	if ($repo) { print "<tr><td>Prefix:</td><td><input type=\"text\" name=\"repoRF\" value=\"$repo\"></td></tr>"; }
+	else { print "<tr><td>Prefix:</td><td><input type=\"text\" name=\"repoRF\"></td></tr>"; }
 	
-	if ($acc) { print "Accession:&nbsp;<input type=\"text\" name=\"ACC\" value=\"$acc\"></br>"; }
-	else { print "Accession:&nbsp;<input type=\"text\" name=\"ACC\"></br>"; }
+	if ($acc) { print "<tr><td>Accession:</td><td><input type=\"text\" name=\"ACC\" value=\"$acc\"></td></tr>"; }
+	else { print "<tr><td>Accession:</td><td><input type=\"text\" name=\"ACC\"></td></tr>"; }
 	
-	if ($prov) { print "Provider&nbsp;(optional):&nbsp;<input type=\"text\" name=\"PROV\" value=\"$prov\">"; }
-	else { print "Provider&nbsp;(optional):&nbsp;<input type=\"text\" name=\"PROV\">"; }
+	if ($prov) { print "<tr><td>Provider&nbsp;(optional):</td><td><input type=\"text\" name=\"PROV\" value=\"$prov\"></td></tr>"; }
+	else { print "<tr><td>Provider&nbsp;(optional):</td><td><input type=\"text\" name=\"PROV\"></td></tr>"; }
 	    
 	print <<EOF;
+	</table>
+	</br>See <a href="https://n2t.net/e/cdl_ebi_prefixes.yaml">here</a> for supported prefixes and providers</br>
 	    
   </div>
 </div>
