@@ -1,28 +1,36 @@
-#!/opt/local/bin/perl
-
-# use the shebang line below when running at bluehost
-#   !/usr/bin/perlml
+#!/usr/bin/perlml
 
 use strict;
 use warnings;
 use utf8;
 
+use CGI::Carp qw(fatalsToBrowser set_message);
+BEGIN {
+   sub handle_errors {
+      my $msg = shift;
+      print "<h1>There is definitely a problem.</h1>";
+      print "<p>Got an error: $msg</p>";
+  }
+  set_message(\&handle_errors);
+}
+
 # Load CGI webform package and create a handler
 use CGI::Simple;
-my $q = CGI::Simple->new;
-$q->charset('utf-8');      # set the charset
 $CGI::Simple::POST_MAX=1024 * 100;  # max 100K posts
 $CGI::Simple::DISABLE_UPLOADS = 1;  # no uploads
+
+my $q = CGI::Simple->new;
+$q->charset('utf-8');      # set the charset
+
 
 # Load other packages
 use Encode;
 use LWP::UserAgent;
 use HTML::TokeParser::Simple;
 use Date::Parse::Lite;
-use JSON;
+use JSON::PP;
 use Text::Names qw(parseName);
 use open qw( :encoding(UTF-8) :std );
-open(STDERR, ">&STDOUT");
 
 # Read in any CGI parameters and clean whitespace
 my $tool_url = $q->url();
