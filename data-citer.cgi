@@ -1,4 +1,7 @@
-#!/usr/bin/perlml
+#!/opt/local/bin/perl
+
+# use the shebang line below when running at bluehost
+#   !/usr/bin/perlml
 
 use strict;
 use warnings;
@@ -8,22 +11,19 @@ use CGI::Carp qw(fatalsToBrowser set_message);
 BEGIN {
    sub handle_errors {
       my $msg = shift;
-      print "<h1>There is definitely a problem.</h1>";
-      print "<p>Got an error: $msg</p>";
+      print "<h1>A serious error occurred</h1>";
+      print "<p>The following error message was generated: $msg</p>";
   }
   set_message(\&handle_errors);
 }
 
 # Load CGI webform package and create a handler
 use CGI::Simple;
-$CGI::Simple::POST_MAX=1024 * 100;  # max 100K posts
-$CGI::Simple::DISABLE_UPLOADS = 1;  # no uploads
-
 my $q = CGI::Simple->new;
 $q->charset('utf-8');      # set the charset
 
-
 # Load other packages
+use CHI; 
 use Encode;
 use LWP::UserAgent;
 use HTML::TokeParser::Simple;
@@ -44,16 +44,21 @@ my $prov = $q->param('PROV');
 $prov =~ s/\s+//g if $prov;
 my $prefer_schema = $q->param('prefer_schema');
 
+# Open the cache
+my $cache = CHI->new( driver => 'File' );
+
 # Set various variables
 my $cut = 5;       # defines length at which author lists are truncated with et al. 
 my $year = "????"; # defines default text for 'year' field
 my $contact_email = 'contact@alhufton.com';
 my $timeout = 30;
+my $cache_time = '30 minutes';
 my $json = JSON::PP->new->pretty;  # creates a json parsing object
 
 # Define core metadata fields to be filled
+
 my ($title, $date, $publisher, $id);
-my ($source_url, $source_metadata, $source_name);
+my %source; # has fields url, metadata and name
 my @authors;
 my @warnings;
 
@@ -63,73 +68,67 @@ print "Content-Type: text/html; charset=utf-8\n\n";
 # Main body 
 start_html("Data Citation Formatter");
 print_header();
-$| = 1; # forces a print flush as the prompt prints, so that user sees a more complete html page while waiting for work to finish
 print_prompt();
-$| = 0;
 do_work();
 print_tail();
 
 exit;
 
 sub do_work {
+    my $cache_id;
 
-    # If user provided an accession number & repo prefix
+    # Build the ID
     if ($acc && $repo) {
         
-        # This section builds a identifiers.org URL
-        my $data_url = &build_url_acc();
-        $id = $data_url; 
+        if ($prov) { $id = "https://identifiers.org/$prov/$repo:$acc" }
+        else { $id = "https://identifiers.org/$repo:$acc"}
+        $cache_id = $id; 
 
-        # Try to get information from the HTML
-        &get_html_metadata( $data_url ); 
-                
-        # Get publisher name from identifiers.org API if it was in the HTML
-        &get_publisher_i_org() unless $publisher; 
-
-    # Or if a DOI was provided
     } elsif ( $doi ) {
-            # clean & check for a valid DOI
-            $doi =~ s/^doi:[\s]*//;
-            $doi =~ s/^https*:\/\/(dx\.)*doi\.org\///;
-            unless ( $doi =~ /^10\./ ) { print "Invalid DOI provided: $doi.\n\n"; &print_tail; exit; }
-            
-            $id = "https://doi.org/$doi"; 
-            &get_doi_metadata;
+        
+        # clean & check for a valid DOI
+        $doi =~ s/^doi:[\s]*//;
+        $doi =~ s/^https*:\/\/(dx\.)*doi\.org\///;
+        unless ( $doi =~ /^10\./ ) { print "Invalid DOI provided: $doi.\n\n"; &print_tail; exit; }
+        $id = "https://doi.org/$doi"; 
+        if ( $prefer_schema ) { $cache_id = "schema" . $id; }
+        else { $cache_id = $id; }
+        
     } else {
         return;
     }
     
+    # Check for a cached result
+    my $cache_results = $cache->get($cache_id);
+    if ( defined $cache_results ) {
+        print $cache_results;
+        return;
+    }
+    
+    # If not cached, now try to get metadata
+    if ( $acc && $repo ) { 
+
+        # Try to get information from the HTML
+        &get_html_metadata( $id ); 
+                
+        # Get publisher name from identifiers.org API if it was in the HTML
+        &get_publisher_i_org() unless $publisher; 
+
+    } elsif ( $doi ) {
+        # Try DataCite or Crossref, with fall back to target HTML
+        &get_doi_metadata;
+        
+    }
+
     &fail unless ($publisher);
     
-    # Create the results section
+    # Build the results    
     my $citation = &citation_nature();
-    print "<div class=\"results\">\n";
-    print "<h3>Data citation information found via $source_name:</h3>\n";
-    print "<p>$citation</p>\n\n" if $citation;
-    print "</div>\n";
+    my $results = &make_results($citation);
+    $results .= &make_details if $source{metadata};
     
-    # Create a details tab
-    if ( $source_metadata ) {
-        print "<div class=\"wrap-collabsible\">\n";
-        print "<input id=\"collapsible\" class=\"toggle\" type=\"checkbox\">\n";
-        print "<label for=\"collapsible\" class=\"lbl-toggle\">Details</label>\n";
-        print "<div class=\"collapsible-content\">\n";
-        print "<div class=\"content-inner\">\n";
-        print "<p>Metadata obtained from <a href=\"$source_url\">$source_url</a></p>\n";
-        foreach my $warning (@warnings) {
-            print "<p>WARNING: $warning</p>\n";
-        }
-        print "<p><pre>$source_metadata</pre></p>\n";
-        print "</div></div></div>\n";
-    }        
-}
-
-# Build a URL according to the rules defined in https://doi.org/10.1038/sdata.2018.29
-sub build_url_acc {
-    my $url;
-    if ($prov) { $url = "https://identifiers.org/$prov/$repo:$acc" }
-    else { $url = "https://identifiers.org/$repo:$acc"}
-    return $url;
+    print $results;
+    $cache->set($cache_id, $results, $cache_time);
 }
 
 # Attempts to retrieve the publisher name from the identifiers.org API
@@ -159,8 +158,8 @@ sub get_publisher_i_org {
             print $response->status_line; &print_tail; exit;
         }
     }
-    unless ($source_name) { $source_name = 'identifiers.org API'; }
-    else { $source_name .= ' & identifiers.org API';}
+    unless ($source{name}) { $source{name} = 'identifiers.org API'; }
+    else { $source{name} .= ' & identifiers.org API';}
 }
 
    
@@ -180,16 +179,23 @@ sub get_doi_metadata {
         print $response->status_line; &fail;
     }
     
+    # Warn if the agency isn't DataCite or Crossref
+    if ( $agency ne 'datacite' && $agency ne 'crossref' ) {
+        push @warnings, "DOI agency was neither DataCite nor Crossref: $agency.";
+    }
+    
+    # Decide whether to get Schema.org metadata
     if ( $prefer_schema || ( $agency ne 'datacite' && $agency ne 'crossref' ) ) {
         &get_html_metadata($id);
     }
     
-    unless ( $source_name ) {
+    # Obtain metadata from DataCite or Crossref, unless already been obtained via Schema.org
+    unless ( $source{name} ) {
         if ( $agency eq 'datacite' ) {
     
             # Get DataCite metadata
-            $source_url = "https://data.datacite.org/application/vnd.datacite.datacite+json/$doi"; 
-            $response = $ua->get($source_url);
+            $source{url} = "https://data.datacite.org/application/vnd.datacite.datacite+json/$doi"; 
+            $response = $ua->get($source{url});
             if ($response->is_success) {
         
                 my $metadata = decode_json $response->content;
@@ -206,16 +212,16 @@ sub get_doi_metadata {
                 $publisher       = $metadata->{publisher};
                 $title           = $metadata->{titles}->[0]->{title};
                 $year            = $metadata->{publicationYear};
-                $source_name     = 'DataCite';
-                $source_metadata = $json->encode($metadata);
+                $source{name}     = 'DataCite';
+                $source{metadata} = $json->encode($metadata);
             } else {
                 print $response->status_line; &fail;
             }
         } elsif ( $agency eq 'crossref' ) {
             
             # Get Crossref metadata
-            $source_url = "https://api.crossref.org/works/$doi";
-            $response = $ua->get($source_url);
+            $source{url} = "https://api.crossref.org/works/$doi";
+            $response = $ua->get($source{url});
             if ($response->is_success) {
         
                 my $metadata = decode_json $response->content;
@@ -236,8 +242,8 @@ sub get_doi_metadata {
                 $publisher       = $metadata->{message}->{publisher};
                 $title           = $metadata->{message}->{title}->[0];
                 $year            = $metadata->{message}->{issued}->{'date-parts'}->[0]->[0];
-                $source_name     = 'Crossref';
-                $source_metadata = $json->encode($metadata);
+                $source{name}     = 'Crossref';
+                $source{metadata} = $json->encode($metadata);
             } else {
                 print $response->status_line; &fail;
             }
@@ -279,9 +285,9 @@ sub get_html_metadata {
         
         if ($i > 0) {
             &parse_Schema_dataset( $use_metadata );
-            $source_name = 'schema.org';
-            $source_url  = $url;
-            $source_metadata = $json->encode($use_metadata);
+            $source{name} = 'schema.org';
+            $source{url}  = $url;
+            $source{metadata} = $json->encode($use_metadata);
         }
         if ($i > 1) { 
             push @warnings, "Schema.org metadata found for more than one DataSet or DataRecord. Only the first was used.";
@@ -418,12 +424,14 @@ sub citation_nature {
     $citation .= "$title. " if $title;
     $citation .= "<em>$publisher</em> " if $publisher;
     $citation .= "<a href=\"$id\">$id</a> " if $id;
-    $citation .= "($year)." if $year;
-    $citation =~ s/\s$//;
+    $citation .= "($year).";
     return $citation;
 }
 
-# Basic subroutines to start and end the webpage
+############################
+# HTML writing subroutines #
+############################
+
 sub start_html {
     print <<EOF;
     
@@ -438,8 +446,8 @@ sub start_html {
 
 body {
   font-family: Verdana, Geneva, sans-serif;;
-  color: #D3D3D3;
-  background-color: #212121;
+  color: #999;
+  background-color: black;
   max-width:1020px;
   margin: auto;
   width: 100vw;
@@ -460,7 +468,7 @@ a:hover {
 .header {
   font-family: Arial, Helvetica, sans-serif;
   color: #DEB887;
-  background-color: #212121;
+  background-color: black;
   padding: 5px;
   margin: 0px;
   line-height: 0px;
@@ -629,7 +637,9 @@ sub print_tail {
     
 <div>&nbsp;</div>    
 <div class="footer">
-<p><a href="https://alhufton.com/">Home</a> | <a href="mailto:$contact_email">Contact</a> | <a href="https://github.com/alhufton2/data-citer">GitHub</a></p>
+<p><a href="https://alhufton.com/">Home</a> 
+| <a href="mailto:$contact_email">Contact</a> 
+| <a href="https://github.com/alhufton2/data-citer">GitHub</a></p>
 <p>© 2020 Andrew Lee Hufton</p>
 </div>
 </body>
@@ -645,15 +655,15 @@ sub fail {
 <p>Citation metadata not found for <a href="$id">$id</a>.</p>
     
 <p>Please note that this tool currently only supports citation metadata provided 
-through DataCite and Schema.org. Do you know of 
+through DataCite, Crossref and Schema.org. Do you know of 
 a data repository using another standard to provide machine-readable citation 
 metadata? <a href="mailto:$contact_email">Email me an example</a>.</p>
     
 EOF
 
-&print_tail;
+    &print_tail;
 
-exit;
+    exit;
     
 }
     
@@ -661,11 +671,11 @@ sub print_intro {
     print <<EOF;
 
 <p>This webform attempts to construct a formatted data citation from a 
-DOI or an <a href="identifiers.org/">identifiers.org</a> registered accession number. Citation information is 
-obtained from the <a href="https://datacite.org/">DataCite</a> 
-or <a href="https://www.crossref.org/">Crossref</a> APIs, 
-or, failing that, by trying to search the target page for <a href="https://schema.org/">
-Schema.org</a> metadata. Only Schema.org metadata in JSON-LD is currently 
+DOI or an <a href="identifiers.org/">identifiers.org</a> registered accession 
+number. Citation information is obtained from the <a href="https://datacite.org/">DataCite</a> 
+or <a href="https://www.crossref.org/">Crossref</a> APIs, or, failing that, by 
+trying to search the target page for <a href="https://schema.org/">Schema.org</a> 
+metadata. Only Schema.org metadata in JSON-LD is currently 
 supported. For identifiers.org datasets, a repository name is obtained from the 
 <a href="https://docs.identifiers.org/articles/api.html#registry">identifiers.org 
 registry API</a> if not found on the target page.  If you know of data records with 
@@ -692,44 +702,43 @@ EOF
 }
 
 sub print_prompt {
+    my %form_prefill;
+    
+    # force a print flush, so that user sees a more complete html page while waiting for work to finish
+    $| = 1; 
+    
+    # Generate HTML snippets if form needs to be prefilled
+    if ( $doi ) { $form_prefill{doi} = "value=\"$doi\""; } 
+    else { $form_prefill{doi} = ''; }
+    if ( $prefer_schema ) { $form_prefill{prefer_schema} = "checked=\"checked\""; }
+    else { $form_prefill{prefer_schema} = ''; }
+    if ( $repo ) { $form_prefill{repo} = "value=\"$repo\""; } 
+    else { $form_prefill{repo} = ''; }
+    if ( $acc ) { $form_prefill{acc} = "value=\"$acc\""; } 
+    else { $form_prefill{acc} = ''; }
+    if ( $prov ) { $form_prefill{prov} = "value=\"$prov\""; } 
+    else { $form_prefill{prov} = ''; }
+    
+        
+    # print the form    
     print <<EOF;
 
 <form> 
 <div class="row">
   <div class="column">
     <h4>Enter a dataset DOI</h4>
-    
-EOF
-
-    if ($doi) { print "<input type=\"text\" name=\"DOI\" value=\"$doi\" size=\"30\">\n";}
-    else { print "<input type=\"text\" name=\"DOI\" size=\"30\">\n"; }
-    
-    if ($prefer_schema) {
-        print "<input style=\"display:inline\" type=\"checkbox\" id=\"prefer_schema\" name=\"prefer_schema\" value=\"true\" checked=\"checked\">";
-    } else {
-        print "<input style=\"display:inline\" type=\"checkbox\" id=\"prefer_schema\" name=\"prefer_schema\" value=\"true\">";
-    }
-    print "<label for=\"prefer_schema\"> Prefer Schema.org</label>\n"; 
-        
-    print <<EOF;
-    
-    <p>If box is checked, Schema.org metadata will be used when available instead of DataCite or Crossref.</p>
+      <input type="text" name="DOI" $form_prefill{doi} size="30" maxlength="500">
+      <input style="display:inline" type="checkbox" id="prefer_schema" name="prefer_schema" value="true" $form_prefill{prefer_schema}>
+      <label for="prefer_schema"> Prefer Schema.org</label>
+      <p>If box is checked, Schema.org metadata will be used when available instead of DataCite or Crossref.</p>
   </div> 
+  
   <div class="column">
     <h4>Or, enter an identifiers.org prefix and accession ID</h4>
     <table>
-EOF
-	
-	if ($repo) { print "<tr><td>Prefix:</td><td><input type=\"text\" name=\"repoRF\" value=\"$repo\"></td></tr>"; }
-	else { print "<tr><td>Prefix:</td><td><input type=\"text\" name=\"repoRF\"></td></tr>"; }
-	
-	if ($acc) { print "<tr><td>Accession:</td><td><input type=\"text\" name=\"ACC\" value=\"$acc\"></td></tr>"; }
-	else { print "<tr><td>Accession:</td><td><input type=\"text\" name=\"ACC\"></td></tr>"; }
-	
-	if ($prov) { print "<tr><td>Provider&nbsp;(optional):</td><td><input type=\"text\" name=\"PROV\" value=\"$prov\"></td></tr>"; }
-	else { print "<tr><td>Provider&nbsp;(optional):</td><td><input type=\"text\" name=\"PROV\"></td></tr>"; }
-	    
-	print <<EOF;
+      <tr><td>Prefix:</td><td><input type="text" name="repoRF" $form_prefill{repo} maxlength="500"></td></tr>
+	  <tr><td>Accession:</td><td><input type="text" name="ACC" $form_prefill{acc} maxlength="500"></td></tr>
+      <tr><td>Provider&nbsp;(optional):</td><td><input type="text" name="PROV" $form_prefill{prov} maxlength="500"></td></tr>
 	</table>
 	</br>See <a href="https://n2t.net/e/cdl_ebi_prefixes.yaml">here</a> for supported prefixes and providers</br>
 	    
@@ -742,4 +751,42 @@ EOF
 	
 EOF
 
+    $| = 0;
+
 }
+
+sub make_results {
+    my $citation = shift; 
+    
+    return <<EOF;
+    
+    <div class="results">
+      <h3>Data citation information found via $source{name}:</h3>
+      <p>$citation</p>
+    </div>
+    
+EOF
+}
+
+sub make_details {
+    
+    my $warnings = '';
+    
+    foreach ( @warnings ) {
+        $warnings .= "<p>WARNING: $_</p>\n";
+    }
+    
+    return <<EOF;
+    
+    <div class="wrap-collabsible">
+        <input id="collapsible" class="toggle" type="checkbox">
+        <label for="collapsible" class="lbl-toggle">Details</label>
+        <div class="collapsible-content">
+          <div class="content-inner">
+            <p>Metadata obtained from <a href="$source{url}">$source{url}</a></p>
+            $warnings
+            <p><pre>$source{metadata}</pre></p>
+    </div></div></div>
+EOF
+
+}    
