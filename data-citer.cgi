@@ -116,7 +116,8 @@ sub do_work {
 
     } elsif ( $doi ) {
         # Try DataCite or Crossref, with fall back to target HTML
-        &get_doi_metadata;
+        if ( $prefer_schema ) { &get_html_metadata( $id ); }
+        unless ( $source{metadata} ) { &get_doi_metadata; }
         
     }
 
@@ -185,70 +186,66 @@ sub get_doi_metadata {
     }
     
     # Decide whether to get Schema.org metadata
-    if ( $prefer_schema || ( $agency ne 'datacite' && $agency ne 'crossref' ) ) {
+    if ( $agency ne 'datacite' && $agency ne 'crossref' ) {
         &get_html_metadata($id);
-    }
+    } elsif ( $agency eq 'datacite' ) {
+
+        # Get DataCite metadata
+        $source{url} = "https://data.datacite.org/application/vnd.datacite.datacite+json/$doi"; 
+        $response = $ua->get($source{url});
+        if ($response->is_success) {
     
-    # Obtain metadata from DataCite or Crossref, unless already been obtained via Schema.org
-    unless ( $source{name} ) {
-        if ( $agency eq 'datacite' ) {
+            my $metadata = decode_json $response->content;
+            foreach my $element ( @{$metadata->{creators}} ) {
+                unless ($element->{nameType} eq 'Organizational') {
+                    # Delete anything within parentheses (hack to deal with some pathological DataCite examples)
+                    $element->{name} =~ s/\(.*?\)//g; 
+                    push @authors, &name_parser_punc($element->{name});
+                } else {
+                    push @authors, $element->{name};
+                }
+            }
     
-            # Get DataCite metadata
-            $source{url} = "https://data.datacite.org/application/vnd.datacite.datacite+json/$doi"; 
-            $response = $ua->get($source{url});
-            if ($response->is_success) {
-        
-                my $metadata = decode_json $response->content;
-                foreach my $element ( @{$metadata->{creators}} ) {
-                    unless ($element->{nameType} eq 'Organizational') {
-                        # Delete anything within parentheses (hack to deal with some pathological DataCite examples)
-                        $element->{name} =~ s/\(.*?\)//g; 
-                        push @authors, &name_parser_punc($element->{name});
-                    } else {
-                        push @authors, $element->{name};
-                    }
-                }
-        
-                $publisher       = $metadata->{publisher};
-                $title           = $metadata->{titles}->[0]->{title};
-                $year            = $metadata->{publicationYear};
-                $source{name}     = 'DataCite';
-                $source{metadata} = $json->encode($metadata);
-            } else {
-                print $response->status_line; &fail;
-            }
-        } elsif ( $agency eq 'crossref' ) {
-            
-            # Get Crossref metadata
-            $source{url} = "https://api.crossref.org/works/$doi";
-            $response = $ua->get($source{url});
-            if ($response->is_success) {
-        
-                my $metadata = decode_json $response->content;
-                unless ( $metadata->{message}->{type} eq 'dataset' ) {
-                    print "<p>Error: Digital object is not registered at Crossref as a dataset ($metadata->{message}->{type}).</p>";
-                    &print_tail; exit;
-                }
-                
-                foreach my $element ( @{$metadata->{message}->{author}} ) {
-                    if ( $element->{family} && $element->{given} ) {
-                        my $name = $element->{family} . ", " . $element->{given};
-                        push @authors, &name_parser_punc($name);
-                    } else {
-                        push @authors, $element->{name};
-                    }
-                }
-        
-                $publisher       = $metadata->{message}->{publisher};
-                $title           = $metadata->{message}->{title}->[0];
-                $year            = $metadata->{message}->{issued}->{'date-parts'}->[0]->[0];
-                $source{name}     = 'Crossref';
-                $source{metadata} = $json->encode($metadata);
-            } else {
-                print $response->status_line; &fail;
-            }
+            $publisher       = $metadata->{publisher};
+            $title           = $metadata->{titles}->[0]->{title};
+            $year            = $metadata->{publicationYear};
+            $source{name}     = 'DataCite';
+            $source{metadata} = $json->encode($metadata);
+        } else {
+            print $response->status_line; &fail;
         }
-    }   
+    } elsif ( $agency eq 'crossref' ) {
+        
+        # Get Crossref metadata
+        $source{url} = "https://api.crossref.org/works/$doi";
+        $response = $ua->get($source{url});
+        if ($response->is_success) {
+    
+            my $metadata = decode_json $response->content;
+            unless ( $metadata->{message}->{type} eq 'dataset' ) {
+                print "<p>Error: Digital object is not registered at Crossref as a dataset ($metadata->{message}->{type}).</p>";
+                &print_tail; exit;
+            }
+            
+            foreach my $element ( @{$metadata->{message}->{author}} ) {
+                if ( $element->{family} && $element->{given} ) {
+                    my $name = $element->{family} . ", " . $element->{given};
+                    push @authors, &name_parser_punc($name);
+                } else {
+                    push @authors, $element->{name};
+                }
+            }
+    
+            $publisher       = $metadata->{message}->{publisher};
+            $title           = $metadata->{message}->{title}->[0];
+            $year            = $metadata->{message}->{issued}->{'date-parts'}->[0]->[0];
+            $source{name}     = 'Crossref';
+            $source{metadata} = $json->encode($metadata);
+        } else {
+            print $response->status_line; &fail;
+        }
+    }
+  
 }
 
 # Get metadata from a target URL
