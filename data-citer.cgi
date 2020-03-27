@@ -56,7 +56,6 @@ my $cache_time = '30 minutes';
 my $json = JSON::PP->new->pretty;  # creates a json parsing object
 
 # Define core metadata fields to be filled
-
 my ($title, $date, $publisher, $id);
 my %source; # has fields url, metadata and name
 my @authors;
@@ -180,14 +179,12 @@ sub get_doi_metadata {
         print $response->status_line; &fail;
     }
     
-    # Warn if the agency isn't DataCite or Crossref
+    # If not a DataCite or Crossref DOI, warn and try to get Schema.org metadata
     if ( $agency ne 'datacite' && $agency ne 'crossref' ) {
+        
         push @warnings, "DOI agency was neither DataCite nor Crossref: $agency.";
-    }
-    
-    # Decide whether to get Schema.org metadata
-    if ( $agency ne 'datacite' && $agency ne 'crossref' ) {
         &get_html_metadata($id);
+        
     } elsif ( $agency eq 'datacite' ) {
 
         # Get DataCite metadata
@@ -692,7 +689,7 @@ and <a href="https://doi.org/10.1038/sdata.2018.259">Cousijn et al.</a></p>
 <p><strong>Note:</strong> this is a personal project, and not a service provided 
 by <a href="https://www.nature.com/nature-research">Nature Research</a> or 
 <em><a href="https://nature.com/sdata/">Scientific Data</a></em>.</p>
-<p><strong>Latest updates</strong>: New dark theme. Also, schema.org & Crossref support, plus a new 'Details' section to show the raw JSON for successful metadata hits.</p>
+<p><strong>Latest updates</strong>: Caching! New dark theme. Also, schema.org & Crossref support.</p>
 
 EOF
 
