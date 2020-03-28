@@ -28,7 +28,7 @@ use Encode;
 use LWP::UserAgent;
 use HTML::TokeParser::Simple;
 use Date::Parse::Lite;
-use JSON::PP;
+use JSON::MaybeXS;
 use Text::Names qw(parseName);
 use open qw( :encoding(UTF-8) :std );
 
@@ -53,7 +53,7 @@ my $year = "????"; # defines default text for 'year' field
 my $contact_email = 'contact@alhufton.com';
 my $timeout = 30;
 my $cache_time = '30';
-my $json = JSON::PP->new->pretty;  # creates a json parsing object
+my $json = JSON::MaybeXS->new->pretty;  # creates a json parsing object
 
 # Define core metadata fields to be filled
 my ($title, $date, $publisher, $id);
