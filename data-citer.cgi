@@ -52,7 +52,7 @@ my $cut = 5;       # defines length at which author lists are truncated with et 
 my $year = "????"; # defines default text for 'year' field
 my $contact_email = 'contact@alhufton.com';
 my $timeout = 30;
-my $cache_time = '30 minutes';
+my $cache_time = '30';
 my $json = JSON::PP->new->pretty;  # creates a json parsing object
 
 # Define core metadata fields to be filled
@@ -62,10 +62,10 @@ my @authors;
 my @warnings;
 
 binmode(STDOUT, ":utf8");
-print "Content-Type: text/html; charset=utf-8\n\n"; 
 
 # Main body 
-start_html("Data Citation Formatter");
+print "Content-Type: text/html; charset=utf-8\n\n";
+start_html();
 print_header();
 print_prompt();
 do_work();
@@ -194,7 +194,7 @@ sub get_doi_metadata {
     
             my $metadata = decode_json $response->content;
             foreach my $element ( @{$metadata->{creators}} ) {
-                unless ($element->{nameType} eq 'Organizational') {
+                if ($element->{nameType} eq 'Personal' || $element->{familyName} ) {
                     # Delete anything within parentheses (hack to deal with some pathological DataCite examples)
                     $element->{name} =~ s/\(.*?\)//g; 
                     push @authors, &name_parser_punc($element->{name});
@@ -312,8 +312,8 @@ sub name_parser_punc {
     foreach my $element ( split(/\s/, $name[0]) ) {
         $initials .= substr($element, 0, 1) . ". ";
     }
-    $initials =~ s/\s$//;
     my $formatted_name = $name[1] . ", " . $initials;
+    $formatted_name =~ s/[\s,]+$//;
     return $formatted_name; 
 }
 
@@ -345,7 +345,7 @@ sub parse_Schema_dataset {
             } else {
                 $name = $element->{name} 
             }
-            $name = &name_parser_punc($name) if ($element->{'@type'} eq 'Person');
+            $name = &name_parser_punc($name) if ( $element->{familyName} || $element->{'@type'} eq 'Person');
             push @authors, $name;
         }
     } 
@@ -428,7 +428,7 @@ sub citation_nature {
 
 sub start_html {
     print <<EOF;
-    
+
 <head>
 <title>Data Citation Formatter</title>
 <meta charset="utf-8">
