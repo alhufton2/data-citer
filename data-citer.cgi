@@ -450,12 +450,16 @@ body {
 }
 
 a, a:visited {
-    color: white;
-    text-decoration: none;
+  color: white;
+  text-decoration: none;
 }
 
 a:hover {
-    color: lightblue;
+  color: lightblue;
+}
+
+pre {
+  white-space: pre-wrap
 }
 
 /* Style the header */
