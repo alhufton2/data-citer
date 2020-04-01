@@ -88,7 +88,7 @@ sub do_work {
         # clean & check for a valid DOI
         $doi =~ s/^doi:[\s]*//;
         $doi =~ s/^https*:\/\/(dx\.)*doi\.org\///;
-        unless ( $doi =~ /^10\./ ) { print "Invalid DOI provided: $doi.\n\n"; &print_tail; exit; }
+        unless ( $doi =~ /^10\./ ) { print "Invalid DOI provided: $doi.\n\n"; &print_tail(); exit; }
         $id = "https://doi.org/$doi"; 
         if ( $prefer_schema ) { $cache_id = "schema" . $id; }
         else { $cache_id = $id; }
@@ -116,7 +116,7 @@ sub do_work {
     } elsif ( $doi ) {
         # Try DataCite or Crossref, with fall back to target HTML
         if ( $prefer_schema ) { &get_html_metadata( $id ); }
-        unless ( $source{metadata} ) { &get_doi_metadata; }
+        unless ( $publisher ) { &get_doi_metadata(); }
         
     }
 
@@ -125,7 +125,7 @@ sub do_work {
     # Build the results    
     my $citation = &citation_nature();
     my $results = &make_results($citation);
-    $results .= &make_details if $source{metadata};
+    $results .= &make_details() if $source{metadata};
     
     print $results;
     $cache->set($cache_id, $results, $cache_time);
@@ -145,7 +145,7 @@ sub get_publisher_i_org {
             $namespaceID = $1; 
         }
     } else {
-        print $response->status_line; &print_tail; exit;
+        print $response->status_line; &print_tail(); exit;
     }
     
     # If a provider was declared, try to get the more specific publisher name
@@ -155,7 +155,7 @@ sub get_publisher_i_org {
             my $metadata = decode_json $response->content;
             $publisher = $metadata->{_embedded}->{resources}->[0]->{name};
         } else {
-            print $response->status_line; &print_tail; exit;
+            print $response->status_line; &print_tail(); exit;
         }
     }
     unless ($source{name}) { $source{name} = 'identifiers.org API'; }
@@ -176,7 +176,7 @@ sub get_doi_metadata {
         my $agency_message = $json->decode($response->content);
         $agency = $agency_message->{message}->{agency}->{id};
     } else {
-        print $response->status_line; &fail;
+        print $response->status_line; &fail();
     }
     
     # If not a DataCite or Crossref DOI, warn and try to get Schema.org metadata
@@ -194,13 +194,12 @@ sub get_doi_metadata {
     
             my $metadata = decode_json $response->content;
             foreach my $element ( @{$metadata->{creators}} ) {
-                if ($element->{nameType} eq 'Personal' || $element->{familyName} ) {
-                    # Delete anything within parentheses (hack to deal with some pathological DataCite examples)
-                    $element->{name} =~ s/\(.*?\)//g; 
-                    push @authors, &name_parser_punc($element->{name});
-                } else {
-                    push @authors, $element->{name};
-                }
+                push @authors, &parse_author( { 
+                        'name' => $element->{name}, 
+                        'type' => $element->{nameType}, 
+                        'familyName' => $element->{familyName} ,
+                        'givenName' => $element->{givenName}
+                } );
             }
     
             $publisher       = $metadata->{publisher};
@@ -209,7 +208,7 @@ sub get_doi_metadata {
             $source{name}     = 'DataCite';
             $source{metadata} = $json->encode($metadata);
         } else {
-            print $response->status_line; &fail;
+            print $response->status_line; &fail();
         }
     } elsif ( $agency eq 'crossref' ) {
         
@@ -221,16 +220,15 @@ sub get_doi_metadata {
             my $metadata = decode_json $response->content;
             unless ( $metadata->{message}->{type} eq 'dataset' ) {
                 print "<p>Error: Digital object is not registered at Crossref as a dataset ($metadata->{message}->{type}).</p>";
-                &print_tail; exit;
+                &print_tail(); exit;
             }
             
             foreach my $element ( @{$metadata->{message}->{author}} ) {
-                if ( $element->{family} && $element->{given} ) {
-                    my $name = $element->{family} . ", " . $element->{given};
-                    push @authors, &name_parser_punc($name);
-                } else {
-                    push @authors, $element->{name};
-                }
+                push @authors, &parse_author( { 
+                        'name' => $element->{name},
+                        'familyName' => $element->{family},
+                        'givenName' => $element->{given}
+                } );
             }
     
             $publisher       = $metadata->{message}->{publisher};
@@ -239,7 +237,7 @@ sub get_doi_metadata {
             $source{name}     = 'Crossref';
             $source{metadata} = $json->encode($metadata);
         } else {
-            print $response->status_line; &fail;
+            print $response->status_line; &fail();
         }
     }
   
@@ -304,9 +302,37 @@ sub get_html_metadata {
     }   
 }
 
+# Author parsing subroutine
+sub parse_author {
+    my $author_info = shift; #hash reference
+    die "bad author info provided to parse_author.\n" unless ( $author_info->{familyName} || $author_info->{givenName} || $author_info->{name} );
+    
+    if ( lc $author_info->{type} eq 'person' || lc $author_info->{type} eq 'personal' || $author_info->{familyName} || $author_info->{givenName} ) {
+        if ( $author_info->{familyName} || $author_info->{givenName} ) {
+            if ( $author_info->{familyName} && $author_info->{givenName} ) {
+                return &name_parser_punc("$author_info->{familyName}, $author_info->{givenName}");
+            } elsif ( $author_info->{name} ) {
+                return &name_parser_punc($author_info->{name});
+            } elsif ( $author_info->{familyName} ) {
+                push @warnings, "Author information included a family name '$author_info->{familyName}' without a given name.";
+                return $author_info->{familyName};
+            } elsif ( $author_info->{givenName} ) {
+                push @warnings, "Author information included a given name '$author_info->{givenName}' without a family name.";
+                return $author_info->{givenName};
+            }
+        } else {
+            return &name_parser_punc($author_info->{name});
+        }
+    } else {
+        return $author_info->{name}
+    }
+}
+
+
 # Formats names as lastname, initials with full punctuation. 
 sub name_parser_punc {
     my $input = shift;
+    $input =~ s/\(.*?\)//g; # remove anything in parentheses (necessary due to some pathological DataCite examples)
     my @name = parseName($input); 
     my $initials = "";
     foreach my $element ( split(/\s/, $name[0]) ) {
@@ -323,7 +349,8 @@ sub parse_Schema_dataset {
     
     # These need to be checked for arrays
     $title     = &assign( $metadata, 'name' );
-    $publisher = &assign2( $metadata, 'publisher', 'name' );
+    $publisher = &assign2( $metadata, 'publisher', 'name' );    
+    unless ( $publisher ) { $publisher = &assign2( $metadata, 'publisher', 'legalName' ); }
     $date      = &assign( $metadata, 'datePublished' );
     
     # probably an array but not always
@@ -339,14 +366,12 @@ sub parse_Schema_dataset {
         
         # Ok now parse all the names in the array
         foreach my $element ( @temp_array ) {
-            my $name; 
-            if ( $element->{familyName} && $element->{givenName} ) {
-                $name = $element->{familyName} . ", " . $element->{givenName};
-            } else {
-                $name = $element->{name} 
-            }
-            $name = &name_parser_punc($name) if ( $element->{familyName} || $element->{'@type'} eq 'Person');
-            push @authors, $name;
+            push @authors, &parse_author( { 
+                    'name' => $element->{name},
+                    'familyName' => $element->{familyName},
+                    'givenName' => $element->{givenName},
+                    'type' => $element->{'@type'}
+                } );
         }
     } 
 }
@@ -389,9 +414,7 @@ sub citation_nature {
     my $citation;
     
     # Define and check for required fields
-    unless ($publisher && $id && $year) {
-        &fail;
-    }
+    &fail() unless ($publisher && $id && $year);
     
     # Print a standard citation
     my $author_line = "";
@@ -787,4 +810,4 @@ sub make_details {
     </div></div></div>
 EOF
 
-}    
+}
