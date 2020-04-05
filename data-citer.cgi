@@ -438,7 +438,10 @@ sub citation_nature {
             $citation = "$author_line ";
         }
     }
-    $citation .= "$title. " if $title;
+    if ( $title ) {
+        $title =~ s/\.$//; 
+        $citation .= "$title. ";
+    }
     $citation .= "<em>$publisher</em> " if $publisher;
     $citation .= "<a href=\"$id\">$id</a> " if $id;
     $citation .= "($year).";
@@ -662,6 +665,7 @@ sub print_tail {
 | <a href="mailto:$contact_email">Contact</a> 
 | <a href="https://github.com/alhufton2/data-citer">GitHub</a></p>
 <p>© 2020 Andrew Lee Hufton</p>
+<p><a href="https://alhufton.com/privacy-policy/">Privacy policy</a></p>
 </div>
 </body>
 </html>
@@ -761,7 +765,7 @@ sub print_prompt {
 	  <tr><td>Accession:</td><td><input type="text" name="ACC" $form_prefill{acc} maxlength="500"></td></tr>
       <tr><td>Provider&nbsp;(optional):</td><td><input type="text" name="PROV" $form_prefill{prov} maxlength="500"></td></tr>
 	</table>
-	</br>See <a href="https://n2t.net/e/cdl_ebi_prefixes.yaml">here</a> for supported prefixes and providers</br>
+	</br>See <a target="_blank" rel="noopener noreferrer" href="https://n2t.net/e/cdl_ebi_prefixes.yaml">here</a> for supported prefixes and providers</br>
 	    
   </div>
 </div>
