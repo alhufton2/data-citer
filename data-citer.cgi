@@ -696,20 +696,12 @@ sub print_intro {
     print <<EOF;
 
 <p>This webform attempts to construct a formatted data citation from a 
-DOI or an <a href="identifiers.org/">identifiers.org</a> registered accession 
+<a href="https://www.doi.org/">DOI</a> or an <a href="identifiers.org/">identifiers.org</a> registered accession 
 number. Citation information is obtained from the <a href="https://datacite.org/">DataCite</a> 
 or <a href="https://www.crossref.org/">Crossref</a> APIs, or, failing that, by 
 trying to search the target page for <a href="https://schema.org/">Schema.org</a> 
-metadata. Only Schema.org metadata in JSON-LD is currently 
-supported. For identifiers.org datasets, a repository name is obtained from the 
-<a href="https://docs.identifiers.org/articles/api.html#registry">identifiers.org 
-registry API</a> if not found on the target page.  If you know of data records with 
-good, machine-readable citation metadata in other formats, please 
-<a href="mailto:$contact_email">let me know</a>. Formatting follows the Nature 
-Research style. For more information on scholarly data citation standards please see 
-<a href="https://doi.org/10.1038/sdata.2018.29">Wimalaratne et al.</a>, 
-<a href="https://doi.org/10.1038/s41597-019-0031-8">Fenner et al.</a>, 
-and <a href="https://doi.org/10.1038/sdata.2018.259">Cousijn et al.</a></p> 
+metadata. Formatting follows the Nature Research style. <a href="https://alhufton.com/building-data-citations-from-roadmap-compliant-metadata-sources/">
+Read more &#9656;</a>
 <p style="text-align:left"><strong>Try these examples:</strong> <a href="$tool_url?DOI=&repoRF=pride.project&ACC=PXD001416&PROV=omicsdi">PXD001416 via OmicsDI</a>,
 <a href="$tool_url?DOI=https%3A%2F%2Fdoi.org%2F10.14284%2F350&repoRF=&ACC=&PROV=">https://doi.org/10.14284/350</a> (DataCite), 
 <a href="$tool_url?DOI=10.1575%2F1912%2Fbco-dmo.804502.1&repoRF=&ACC=&PROV="> https://doi.org/10.1575/1912/bco-dmo.804502.1</a> (Crossref or Schema.org), 
@@ -720,7 +712,6 @@ and <a href="https://doi.org/10.1038/sdata.2018.259">Cousijn et al.</a></p>
 <p><strong>Note:</strong> this is a personal project, and not a service provided 
 by <a href="https://www.nature.com/nature-research">Nature Research</a> or 
 <em><a href="https://nature.com/sdata/">Scientific Data</a></em>.</p>
-<p><strong>Latest updates</strong>: Caching! New dark theme. Also, schema.org & Crossref support.</p>
 
 EOF
 
