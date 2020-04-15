@@ -423,7 +423,7 @@ sub citation_nature {
         my $k = @authors; 
         if ($k > 0 ) {
             if ($k >= $cut) {
-                $author_line = $authors[0] . " et al."
+                $author_line = $authors[0] . " <em>et al.</em>"
             } else {
                 my $i = 0;
                 my $connect = ", ";
@@ -442,7 +442,7 @@ sub citation_nature {
         $title =~ s/\.$//; 
         $citation .= "$title. ";
     }
-    $citation .= "<em>$publisher</em> " if $publisher;
+    $citation .= "<em>$publisher,</em> " if $publisher;
     $citation .= "<a href=\"$id\">$id</a> " if $id;
     $citation .= "($year).";
     return $citation;
@@ -451,6 +451,8 @@ sub citation_nature {
 ############################
 # HTML writing subroutines #
 ############################
+
+# Collapsible text box based on https://alligator.io/css/collapsible/
 
 sub start_html {
     print <<EOF;
@@ -465,10 +467,11 @@ sub start_html {
 }
 
 body {
-  font-family: Verdana, Geneva, sans-serif;;
+  font-family: Verdana, Geneva, sans-serif;
   color: #999;
+  font-size: .9rem;
   background-color: black;
-  max-width:1020px;
+  max-width: 900px;
   margin: auto;
   width: 100vw;
   padding: 10px;
@@ -481,7 +484,7 @@ a, a:visited {
 }
 
 a:hover {
-  color: lightblue;
+  text-decoration: underline;
 }
 
 pre {
@@ -491,25 +494,22 @@ pre {
 /* Style the header */
 .header {
   font-family: Arial, Helvetica, sans-serif;
-  color: #DEB887;
-  background-color: black;
   padding: 5px;
   margin: 0px;
   line-height: 0px;
   text-align: left;
-  font-size: 16px;
+  font-size: 1.1rem;
 }
 
 .header a {
   text-decoration: none;
-  color: #DEB887;
+  color: #ffbe61;
 }
 
 /* Style the intro */
 .intro {
   padding: 10px;
   text-align: justify;
-  font-size: 14px;
 }
 
 /* Style the results */
@@ -631,7 +631,7 @@ input[type='checkbox'] {
 }
 
 .collapsible-content .content-inner {
-  background: #4d3900;
+  background: #333300;
   color: #fff2cc;
   border-bottom: 1px solid rgba(250, 224, 66, .45);
   border-bottom-left-radius: 7px;
