@@ -193,18 +193,20 @@ sub get_doi_metadata {
         if ($response->is_success) {
     
             my $metadata = decode_json $response->content;
-            foreach my $element ( @{$metadata->{creators}} ) {
-                push @authors, &parse_author( { 
-                        'name' => $element->{name}, 
-                        'type' => $element->{nameType}, 
-                        'familyName' => $element->{familyName} ,
-                        'givenName' => $element->{givenName}
-                } );
+            if ( $metadata->{creators} ) {
+                foreach my $element ( @{$metadata->{creators}} ) {
+                    push @authors, &parse_author( { 
+                            'name' => $element->{name}, 
+                            'type' => $element->{nameType}, 
+                            'familyName' => $element->{familyName} ,
+                            'givenName' => $element->{givenName}
+                    } );
+                }
             }
     
-            $publisher       = $metadata->{publisher};
-            $title           = $metadata->{titles}->[0]->{title};
-            $year            = $metadata->{publicationYear};
+            $publisher       = $metadata->{publisher} if ( $metadata->{publisher} );
+            $title           = $metadata->{titles}->[0]->{title} if ( $metadata->{titles}->[0]->{title} ); 
+            $year            = $metadata->{publicationYear} if ( $metadata->{publicationYear} );
             $source{name}     = 'DataCite';
             $source{metadata} = $json->encode($metadata);
         } else {
@@ -223,17 +225,23 @@ sub get_doi_metadata {
                 &print_tail(); exit;
             }
             
-            foreach my $element ( @{$metadata->{message}->{author}} ) {
-                push @authors, &parse_author( { 
-                        'name' => $element->{name},
-                        'familyName' => $element->{family},
-                        'givenName' => $element->{given}
-                } );
+            if ( $metadata->{message}->{author} ) {
+                foreach my $element ( @{$metadata->{message}->{author}} ) {
+                    push @authors, &parse_author( { 
+                            'name' => $element->{name},
+                            'familyName' => $element->{family},
+                            'givenName' => $element->{given}
+                    } );
+                }
             }
     
-            $publisher       = $metadata->{message}->{publisher};
-            $title           = $metadata->{message}->{title}->[0];
-            $year            = $metadata->{message}->{issued}->{'date-parts'}->[0]->[0];
+            $publisher       = $metadata->{message}->{publisher} if ( $metadata->{message}->{publisher} ); 
+            $title           = $metadata->{message}->{title}->[0] if ( $metadata-> {message}->{title}->[0] ); 
+            if ( $metadata->{message}->{issued}->{'date-parts'}->[0]->[0] ) {
+                $year        = $metadata->{message}->{issued}->{'date-parts'}->[0]->[0];
+            } elsif ( $metadata->{message}->{indexed}->{'date-parts'}->[0]->[0] ) {
+                $year        = $metadata->{message}->{indexed}->{'date-parts'}->[0]->[0];
+            }
             $source{name}     = 'Crossref';
             $source{metadata} = $json->encode($metadata);
         } else {
