@@ -120,7 +120,7 @@ sub do_work {
         
     }
 
-    &fail unless ($publisher);
+    &fail unless ($publisher && $id && $year);
     
     # Build the results    
     my $citation = &citation_nature();
@@ -421,9 +421,6 @@ sub citation_nature {
     
     my $citation;
     
-    # Define and check for required fields
-    &fail() unless ($publisher && $id && $year);
-    
     # Print a standard citation
     my $author_line = "";
  
@@ -450,7 +447,7 @@ sub citation_nature {
         $title =~ s/\.$//; 
         $citation .= "$title. ";
     }
-    $citation .= "<em>$publisher,</em> " if $publisher;
+    $citation .= "<em>$publisher</em> " if $publisher;
     $citation .= "<a href=\"$id\">$id</a> " if $id;
     $citation .= "($year).";
     return $citation;
