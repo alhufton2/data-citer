@@ -3,6 +3,21 @@
 # use the shebang line below when running at bluehost
 #   !/usr/bin/perlml
 
+###########################
+# Data Citation Formatter #
+###########################
+# Written by Andrew L Hufton (contact@alhufton.com)
+# See https://github.com/alhufton2/data-citer for updates
+#
+# A webtool for creating well-formatted data citations, following the data 
+# citation roadmap guidelines. See the blog at the link below for details:
+# https://alhufton.com/building-data-citations-from-roadmap-compliant-metadata-sources/
+#
+##### Before running ######
+# 1. enter your $contact_email, to identify yourself to the CrossRef and DataCite APIs
+# 2. Configure the cache as needed for your system. See CHI documentation for details. 
+###########################
+
 use strict;
 use warnings;
 use utf8;
@@ -46,11 +61,12 @@ my $prefer_schema = $q->param('prefer_schema');
 
 # Open the cache
 my $cache = CHI->new( driver => 'File' );
+# my $cache = CHI->new( driver => 'File', root_dir => '/home3/alhufton/tmp/data-citer' );
 
 # Set various variables
 my $cut = 5;       # defines length at which author lists are truncated with et al. 
 my $year = "????"; # defines default text for 'year' field
-my $contact_email = 'contact@alhufton.com';
+my $contact_email = 'enter contact email address';
 my $timeout = 30;
 my $cache_time = '30';
 my $json = JSON::MaybeXS->new->pretty;  # creates a json parsing object
@@ -205,7 +221,7 @@ sub get_doi_metadata {
             }
     
             $publisher       = $metadata->{publisher} if ( $metadata->{publisher} );
-            $title           = $metadata->{titles}->[0]->{title} if ( $metadata->{titles}->[0]->{title} ); 
+            $title           = &assign2($metadata, 'titles', 'title'); 
             $year            = $metadata->{publicationYear} if ( $metadata->{publicationYear} );
             $source{name}     = 'DataCite';
             $source{metadata} = $json->encode($metadata);
