@@ -83,6 +83,7 @@ binmode(STDOUT, ":utf8");
 print "Content-Type: text/html; charset=utf-8\n\n";
 start_html();
 print_header();
+print_menu();
 print_prompt();
 do_work();
 print_tail();
@@ -676,10 +677,11 @@ EOF
 
 sub print_header {
     print "<div class=\"header\"><h1><a href=\"$tool_url\">Data Citation Formatter</a></h1></div>\n";
-    print_menu();
+    print "<div class=\"intro\">\n";
     unless (($acc && $repo) || $doi ) {
         &print_intro;
     } 
+    print "</div>\n";
 }
 
 sub print_tail {
@@ -720,7 +722,7 @@ EOF
     
 sub print_intro {
     print <<EOF;
-<div class="intro">
+
 <p>This webform attempts to construct a formatted data citation from a 
 <a href="https://www.doi.org/">DOI</a> or an <a href="https://identifiers.org/">identifiers.org</a> registered accession 
 number. Citation information is obtained from the <a href="https://datacite.org/">DataCite</a> 
@@ -738,7 +740,7 @@ Read more &#9656;</a>
 <p><strong>Note:</strong> this is a personal project, and not a service provided 
 by <a href="https://www.nature.com/nature-research">Nature Research</a> or 
 <em><a href="https://nature.com/sdata/">Scientific Data</a></em>.</p>
-</div>
+
 EOF
 
 }
