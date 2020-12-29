@@ -1,7 +1,4 @@
-#!/opt/local/bin/perl
-
-# use the shebang line below when running at bluehost
-#   !/usr/bin/perlml
+#!/usr/bin/perl
 
 ###########################
 # Data Citation Formatter #
@@ -60,13 +57,13 @@ $prov =~ s/\s+//g if $prov;
 my $prefer_schema = $q->param('prefer_schema');
 
 # Open the cache
-my $cache = CHI->new( driver => 'File' );
-# my $cache = CHI->new( driver => 'File', root_dir => '/home3/alhufton/tmp/data-citer' );
+# my $cache = CHI->new( driver => 'File' );
+my $cache = CHI->new( driver => 'File', root_dir => 'path/to/cache/dir' );
 
 # Set various variables
 my $cut = 5;       # defines length at which author lists are truncated with et al. 
 my $year = "????"; # defines default text for 'year' field
-my $contact_email = 'enter contact email address';
+my $contact_email = 'enter email address';
 my $timeout = 30;
 my $cache_time = '30';
 my $json = JSON::MaybeXS->new->pretty;  # creates a json parsing object
@@ -524,7 +521,7 @@ pre {
 
 .header a {
   text-decoration: none;
-  color: #ffbe61;
+  color: rgb(238, 238, 238);
 }
 
 /* Style the intro */
@@ -658,8 +655,8 @@ input[type='checkbox'] {
 }
 
 .collapsible-content .content-inner {
-  background: #333300;
-  color: #fff2cc;
+  background: rgba(51, 204, 51,0.85);
+  color: rgb(20,20,20);
   border-bottom: 1px solid rgba(250, 224, 66, .45);
   border-bottom-left-radius: 7px;
   border-bottom-right-radius: 7px;
