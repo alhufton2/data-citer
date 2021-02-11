@@ -509,7 +509,7 @@ sub start_html {
 <title>Data Citation Formatter</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="../css/tool.css">
+<link rel="stylesheet" href="../css/tool.css?test=some">
 </head>
 <body>
     
@@ -520,7 +520,7 @@ EOF
 sub print_header {
     print <<EOF;
 <div class="header">
-  <h1><a href="$tool_url">Data Citation Formatter</a></h1>
+  <h1><a href="$tool_url">{data citation formatter}</a></h1>
   <h4>Construct a formatted data citation from a <a href="https://www.doi.org/">DOI</a> or an <a href="identifiers.org/">identifiers.org</a> accession number</h4>
 </div>
 EOF
@@ -616,8 +616,8 @@ sub print_prompt {
   <div class="column">
     <h4>Enter a dataset DOI</h4>
       <input type="text" name="DOI" $form_prefill{doi} size="30" maxlength="500">
-      <input style="display:inline" type="checkbox" id="prefer_schema" name="prefer_schema" value="true" $form_prefill{prefer_schema}>
-      <label for="prefer_schema"> Prefer Schema.org</label>
+      <nobr><input style="display:inline" type="checkbox" id="prefer_schema" name="prefer_schema" value="true" $form_prefill{prefer_schema}>
+      <label for="prefer_schema">Prefer&nbsp;Schema.org</label></nobr>
       <p>If box is checked, Schema.org metadata will be used when available instead of DataCite or Crossref.</p>
   </div> 
   
@@ -732,10 +732,10 @@ function autocomplete(inp, arr) {
   });
 }
 
-/*An array containing all the country names in the world:*/
+/*An array containing all the repo names:*/
 var repositories = [$repo_list];
 
-/*initiate the autocomplete function on the "myRepos" element, and pass along the countries array as possible autocomplete values:*/
+/*initiate the autocomplete function on the "myRepos" element, and pass along the repo array as possible autocomplete values:*/
 autocomplete(document.getElementById("myRepos"), repositories);
 </script>
 	

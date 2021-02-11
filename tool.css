@@ -1,0 +1,264 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Verdana, Geneva, sans-serif;
+  color: #999;
+  font-size: 0.9rem;
+  background-color: black;
+  max-width: 900px;
+  margin: auto;
+  width: 100vw;
+  padding: 10px;
+}
+
+a, a:visited {
+  color: white;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+pre {
+  white-space: pre-wrap
+}
+
+/* Style the header */
+.header {
+  font-family: Arial, Helvetica, sans-serif;
+  padding: 0px;
+  margin: 0px;
+  text-align: left;
+  font-size: 1.1rem;
+}
+
+.header h1, h2, h3, h4 {
+  margin-bottom: 10px;
+}
+  
+.header h1 a {
+  text-decoration: none;
+  color: #ffbe61;
+}
+
+/* Style the intro */
+.intro {
+  padding: 10px;
+  text-align: justify;
+}
+
+/* Style the results */
+.results {
+  padding: 10px;
+  text-align: left;
+}
+
+.results h3, .results h2, .results h4 {
+  color: #70db70;
+  font-weight: normal;
+  margin-top: 0;
+}
+
+.citation {
+  border: 2px solid #70db70;
+  background-color: black;
+  padding: 10px 25px;
+  font-size: 1rem;
+  border-radius: 20px;
+}
+
+.button {
+  padding: 10px;
+}
+
+.provider {
+  background-color: #70db70;
+  border: 4px solid #70db70;
+  padding: 8px;
+  text-align: center;
+  display: inline-block;
+  margin: 2px 10px;
+  border-radius: 12px;
+}
+
+a.provider {
+  text-decoration:none;
+  color: black;
+}
+
+.provider:hover {
+  background-color: white;
+}
+
+/* Create equal columns that float next to each other */
+.column {
+  float: left;
+  width: 50%;
+  padding: 10px;
+}
+
+.column h2, h3, h4 {
+  margin-top: 0; 
+  color: #70db70;
+  font-weight: normal;
+}
+
+/* Clear floats after the columns */
+.row:after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+/* Style the breadcrumbs nav */
+.nav {
+  border-top: 1px solid;
+  border-bottom: 1px solid;
+  border-color: rgb(68,68,68);
+}
+
+/* Style the footer */
+.footer {
+  padding: 10px;
+  text-align: right;
+  border-top: 1px solid;
+  border-color: rgb(68,68,68);
+}
+
+/* Responsive layout - makes the three columns stack on top of each other instead of next to each other */
+@media screen and (max-width: 600px) {
+  .column {
+	width: 100%;
+  }
+}
+
+.wrap-collabsible {
+  margin-bottom: 1.2rem 0;
+}
+
+input[type='checkbox'] {
+  display: none;
+}
+
+.lbl-toggle {
+  display: block;
+
+  font-weight: bold;
+  font-size: 1rem;
+  text-align: center;
+
+  padding: 1rem;
+
+  background: #606060;
+  color: #D3D3D3; 
+
+  cursor: pointer;
+
+  border-radius: 7px;
+  transition: all 0.25s ease-out;
+}
+
+.lbl-toggle:hover {
+  color: #66ff66;
+}
+
+.lbl-toggle::before {
+  content: ' ';
+  display: inline-block;
+
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 5px solid currentColor;
+  vertical-align: middle;
+  margin-right: .7rem;
+  transform: translateY(-2px);
+  transition: transform .2s ease-out;
+}
+
+.toggle:checked + .lbl-toggle::before {
+  transform: rotate(90deg) translateX(-3px);
+}
+
+.collapsible-content {
+  max-height: 0px;
+  overflow: hidden;
+  transition: max-height .25s ease-in-out;
+}
+
+.toggle:checked + .lbl-toggle + .collapsible-content {
+  max-height: 10000vh;
+}
+
+.toggle:checked + .lbl-toggle {
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.collapsible-content .content-inner {
+  background: #70db70;
+  color: rgb(20,20,20);
+  border-bottom: 1px solid rgba(250, 224, 66, .45);
+  border-bottom-left-radius: 7px;
+  border-bottom-right-radius: 7px;
+  padding: .5rem 1rem;
+}
+
+.collapsible-content .content-inner a {
+  color: purple;
+}
+
+/* Autocomplete stuff. The container must be positioned relative:*/
+.autocomplete {
+  position: relative;
+  display: inline-block;
+}
+
+input {
+  border: 1px solid transparent;
+  background-color: #f1f1f1;
+  padding: 5px;
+  margin: 5px;
+}
+
+input[type=text] {
+  background-color: #f1f1f1;
+}
+
+input[type=submit] {
+  cursor: pointer;
+}
+
+.autocomplete-items {
+  position: absolute;
+  border: 1px solid #d4d4d4;
+  border-bottom: none;
+  border-top: none;
+  z-index: 99;
+  /*position the autocomplete items to be the same width as the container:*/
+  top: 100%;
+  left: 0;
+  right: 0;
+}
+
+.autocomplete-items div {
+  padding: 10px;
+  cursor: pointer;
+  background-color: #fff; 
+  border-bottom: 1px solid #d4d4d4; 
+}
+
+/*when hovering an item:*/
+.autocomplete-items div:hover {
+  background-color: #e9e9e9; 
+}
+
+/*when navigating through the items using the arrow keys:*/
+.autocomplete-active {
+  background-color: #70db70 !important; 
+  color: #ffffff; 
+}
+
+
