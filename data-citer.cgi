@@ -509,7 +509,7 @@ sub start_html {
 <title>Data Citation Formatter</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="../css/tool.css?test=some">
+<link rel="stylesheet" href="../css/tool.css">
 </head>
 <body>
     
