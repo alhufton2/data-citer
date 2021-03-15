@@ -63,7 +63,6 @@ my $cache = CHI->new( driver => 'File' );
 # my $cache = CHI->new( driver => 'File', root_dir => '/home3/alhufton/tmp/data-citer' );
 
 # Set various variables
-my $cut = 5;       # defines length at which author lists are truncated with et al. 
 my $year = "????"; # defines default text for 'year' field
 my $contact_email = 'enter email address';
 my $timeout = 30;
@@ -77,7 +76,7 @@ $ua->timeout($timeout);
 $ua->agent('Mozilla/5.0');
 
 # Define core metadata fields to be filled
-my ($title, $date, $publisher, $id);
+my ($title, $date, $publisher, $id, $version);
 my %source; # has fields url, metadata and name
 my @authors;
 my @warnings;
@@ -153,11 +152,11 @@ sub do_work {
 
     &fail unless ($publisher && $id && $year);
     
-    # Build the results    
-    my $citation = &citation_nature();
-    my $results = &make_results($citation);
+    # Build the results
+    my $results = &make_results();
+
     if ( $repo && $registry{$repo}->{providerCode} ) {
-    	$results .= &makeAltProv($registry{$repo}->{providerCode});  # make subroutine that makes formatted HTML
+    	$results .= &makeAltProv($registry{$repo}->{providerCode}); 
     }
     $results .= &make_details() if $source{metadata};
     
@@ -216,6 +215,7 @@ sub get_doi_metadata {
             }
     
             $publisher       = $metadata->{publisher} if ( $metadata->{publisher} );
+            $version         = $metadata->{version} if ( $metadata->{version} );
             $title           = &assign2($metadata, 'titles', 'title'); 
             $year            = $metadata->{publicationYear} if ( $metadata->{publicationYear} );
             $source{name}     = 'DataCite';
@@ -247,7 +247,8 @@ sub get_doi_metadata {
             }
     
             $publisher       = $metadata->{message}->{publisher} if ( $metadata->{message}->{publisher} ); 
-            $title           = $metadata->{message}->{title}->[0] if ( $metadata-> {message}->{title}->[0] ); 
+            $title           = $metadata->{message}->{title}->[0] if ( $metadata->{message}->{title}->[0] ); 
+            $version         = $metadata->{message}->{version} if ( $metadata->{message}->{version} );
             if ( $metadata->{message}->{issued}->{'date-parts'}->[0]->[0] ) {
                 $year        = $metadata->{message}->{issued}->{'date-parts'}->[0]->[0];
             } elsif ( $metadata->{message}->{indexed}->{'date-parts'}->[0]->[0] ) {
@@ -374,6 +375,7 @@ sub parse_Schema_dataset {
     $publisher = &assign2( $metadata, 'publisher', 'name' );    
     unless ( $publisher ) { $publisher = &assign2( $metadata, 'publisher', 'legalName' ); }
     $date      = &assign( $metadata, 'datePublished' );
+    $version   = &assign( $metadata, 'version' );
     
     # probably an array but not always
     if ( $metadata->{creator} ) {
@@ -429,10 +431,10 @@ sub assign2 {
     return undef;
 }
     
-
 # Format a citation string according to the Nature Research style
 sub citation_nature {
     
+	my $cut = 5;       # defines length at which author lists are truncated with et al. 
     my $citation;
     
     # Print a standard citation
@@ -464,6 +466,147 @@ sub citation_nature {
     $citation .= "<em>$publisher</em> " if $publisher;
     $citation .= "<a href=\"$id\">$id</a> " if $id;
     $citation .= "($year).";
+    return $citation;
+}
+
+# Format a citation string according to the APA style (used by AGU) -- unfinished, still mostly nature
+sub citation_apa {
+    
+	my $cut = 21;    # If 21 or more, show first 19, then '...', then last author
+    my $citation;
+    my $parenthetical_details = '';
+    if ($acc && $version) {
+    	$parenthetical_details = "($acc; Version $version)";
+    } elsif ($acc) {
+    	$parenthetical_details = "($acc)";
+    } elsif ($version) {
+    	$parenthetical_details = "(Version $version)";
+    }
+    
+    # Print a standard citation
+    my $author_line = "";
+ 
+    if ( @authors ) {
+        my $k = @authors; 
+        if ($k > 0 ) {
+
+			my $i = 0;
+			my $connect = ", ";
+			foreach my $author ( @authors ) {
+				++$i; 
+				if ($i == $k - 1) { $connect = ", & "; }
+				if ($i == $k) { $connect = ""; }
+				if ($i == $cut - 1 && $k > $cut ) { $author_line .= $author . ", . . . " . pop @authors; last; }
+				$author_line .= $author . $connect;
+			}
+            $author_line .= "." unless ( $author_line =~ /\.$/ );
+                
+            $citation = "$author_line ";
+        }
+		$citation .= "($year). ";
+		if ( $title ) {
+			$title =~ s/\.$//; 
+			$citation .= "<em>$title</em> $parenthetical_details [dataset]. ";
+		}
+	} elsif ( $title ) {
+		$title =~ s/\.$//; 
+		$citation = "<em>$title</em> $parenthetical_details [dataset]. ";
+		$citation .= "($year). ";
+	} else {
+		$parenthetical_details =~ s/^\(|\)$//g;
+		$citation = "$parenthetical_details [dataset]. ";
+		$citation .= "($year). ";
+	}
+		
+    # Ideally, now enter numerical identifiers and version numbers in parentheses
+    $citation .= "$publisher. " if $publisher;
+    $citation .= "<a href=\"$id\">$id</a> " if $id;
+    
+    return $citation;
+}
+
+# Format a citation string according to the Vancouver style -- unfinished, still mostly nature
+# Need to look at capturing a more complete pub date
+sub citation_vancouver {
+    
+	my $cut = 6;  
+    my $citation;
+  
+    my @date = localtime();
+    my @months = qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
+    my $current_year = $date[5] + 1900;
+    my $current_date = "$date[3] $months[$date[4]] $current_year";
+    
+    # Print a standard citation
+    my $author_line = "";
+ 
+    if ( @authors ) {
+        my $k = @authors; 
+        if ($k > 0 ) {
+
+			my $i = 0;
+			my $connect = ", ";
+			foreach my $author ( @authors ) {
+				if ( $author =~ /^[A-Z][\p{L}]+,/ ) {
+					$author =~ s/\.\s*|\,//g;
+				}
+				
+				++$i; 
+				if ($i == $k) { $connect = ""; }
+				if ($i == $cut && $k > $cut ) { $author_line .= $author . ", et al."; last; }
+				$author_line .= $author . $connect;
+			}
+			$author_line .= "." unless ( $author_line =~ /\.$/ );
+                
+			$citation = "$author_line ";
+        }
+    }
+    if ( $title ) {
+        $title =~ s/\.$//; 
+        $citation .= "$title ";
+    }
+    $citation .= "[dataset]. ";
+    $citation .= "Version $version. " if $version;
+    $citation .= "$year [cited $current_date]. ";
+    $citation .= "$publisher. " if $publisher;
+    $citation .= "Available from: <a href=\"$id\">$id</a> " if $id;
+    return $citation;
+}
+
+# Format a citation string according to the Copernicus style
+sub citation_copernicus {
+    
+	my $cut = 100;       # defines length at which author lists are truncated with et al. 
+    my $citation;
+    
+    # Print a standard citation
+    my $author_line = "";
+ 
+    if ( @authors ) {
+        my $k = @authors; 
+        if ($k > 0 ) {
+
+			my $i = 0;
+			my $connect = ", ";
+			foreach my $author ( @authors ) {
+				++$i; 
+				if ($i == $k - 1) { $connect = ", and "; }
+				if ($i == $k) { $connect = ""; }
+				if ($i == $cut - 1 && $k > $cut ) { $author_line .= $author . ", et al."; last; }
+				$author_line .= $author . $connect;
+			}
+			$author_line .= ":";
+                
+            $citation = "$author_line ";
+        }
+    }
+    if ( $title ) {
+        $title =~ s/\.$//; 
+        $citation .= "$title, ";
+    }
+    $citation .= "$publisher, " if $publisher;
+    $citation .= "<a href=\"$id\">$id</a>, " if $id;
+    $citation .= "$year.";
     return $citation;
 }
 
@@ -509,7 +652,7 @@ sub start_html {
 <title>Data Citation Formatter</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="../css/tool.css">
+<link rel="stylesheet" href="../css/tool.css?awear">
 </head>
 <body>
     
@@ -629,8 +772,9 @@ sub print_prompt {
 	</table>	    
   </div>
 </div>
+
 <div class="button">
-<input type="submit" value="Get data citation" style="font-size: 20px;">
+	<input type="submit" value="Get data citation" style="font-size: 20px;">
 </div>
 </form>
 
@@ -746,16 +890,63 @@ EOF
 }
 
 sub make_results {
-    my $citation = shift; 
     
-    return <<EOF;
+	my $results = <<EOF;
     
-    <div class="results">
-      <h3>Data citation information found via $source{name}:</h3>
-      <div class="citation"><p>$citation</p></div>
-    </div>
-    
+<div class="results">
+  <h3>Data citation information found via $source{name}:</h3>
+	<div class="tab">
+		<button class="tablinks" onclick="openCitation(event, 'nature')" id="defaultOpen">Nature Research</button>
+		<button class="tablinks" onclick="openCitation(event, 'copernicus')">Copernicus</button>
+		<button class="tablinks" onclick="openCitation(event, 'apa')">APA</button>
+		<button class="tablinks" onclick="openCitation(event, 'vancouver')">Vancouver</button>
+	</div>
+      
 EOF
+
+	my $citation = &citation_nature();
+	$results .= "<div id=\"nature\" class=\"tabcontent\"><p>$citation</p></div>\n";
+	$citation = &citation_copernicus();
+	$results .= "<div id=\"copernicus\" class=\"tabcontent\"><p>$citation</p></div>\n";
+	$citation = &citation_apa();
+	$results .= "<div id=\"apa\" class=\"tabcontent\"><p>$citation</p></div>\n";
+	$citation = &citation_vancouver();
+	$results .= "<div id=\"vancouver\" class=\"tabcontent\"><p>$citation</p></div>\n";
+
+    $results .= <<EOF;
+    
+</div>
+    
+<script>
+function openCitation(evt, styleName) {
+  // Declare all variables
+  var i, tabcontent, tablinks;
+
+  // Get all elements with class="tabcontent" and hide them
+  tabcontent = document.getElementsByClassName("tabcontent");
+  for (i = 0; i < tabcontent.length; i++) {
+	tabcontent[i].style.display = "none";
+  }
+
+  // Get all elements with class="tablinks" and remove the class "active"
+  tablinks = document.getElementsByClassName("tablinks");
+  for (i = 0; i < tablinks.length; i++) {
+	tablinks[i].className = tablinks[i].className.replace(" active", "");
+  }
+
+  // Show the current tab, and add an "active" class to the button that opened the tab
+  document.getElementById(styleName).style.display = "block";
+  evt.currentTarget.className += " active";
+
+}
+  
+// Get the element with id="defaultOpen" and click on it
+document.getElementById("defaultOpen").click();
+</script>
+
+EOF
+
+    return $results;
 }
 
 sub make_details {
