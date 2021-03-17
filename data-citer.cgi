@@ -16,6 +16,7 @@
 ##### Before running ######
 # 1. enter your $contact_email, to identify yourself to the CrossRef and DataCite APIs
 # 2. Configure the cache as needed for your system. See CHI documentation for details. 
+# 3. Check that the shebang line points at the right perl installation for your system
 ###########################
 
 use strict;
@@ -165,17 +166,17 @@ sub do_work {
 }
 
 sub makeAltProv {
-	my %provs = %{$_[0]};
-	my $html = "<div class=\"results\"><h3>Other providers</h3><p>";
-	foreach my $provider ( keys %provs ) {
-		my $repo_url = $q->url_encode( $repo );
-		$html .= "<a href=\"$tool_url?DOI=&REPO=$repo_url&ACC=$acc&PROV=$provider\" class=\"provider\">$provider</a>\n";
-	}
-	$html .= "</p></div>\n";
-	return $html;
+    my %provs = %{$_[0]};
+    my $html = "<div class=\"results\"><h3>Other providers</h3><p>";
+    foreach my $provider ( keys %provs ) {
+        my $repo_url = $q->url_encode( $repo );
+        $html .= "<a href=\"$tool_url?DOI=&REPO=$repo_url&ACC=$acc&PROV=$provider\" class=\"provider\">$provider</a>\n";
+    }
+    $html .= "</p></div>\n";
+    return $html;
 }
    
-# Get DataCite metadata from a provided DOI
+# Get metadata from a provided DOI
 sub get_doi_metadata {
 
     my $agency;
@@ -263,7 +264,7 @@ sub get_doi_metadata {
   
 }
 
-# Get metadata from a target URL
+# Get Schema.org metadata from a target URL
 sub get_html_metadata {
     my $url = shift;
     
@@ -437,7 +438,6 @@ sub citation_nature {
 	my $cut = 5;       # defines length at which author lists are truncated with et al. 
     my $citation;
     
-    # Print a standard citation
     my $author_line = "";
  
     if ( @authors ) {
@@ -474,6 +474,7 @@ sub citation_apa {
     
 	my $cut = 21;    # If 21 or more, show first 19, then '...', then last author
     my $citation;
+    
     my $parenthetical_details = '';
     if ($acc && $version) {
     	$parenthetical_details = "($acc; Version $version)";
@@ -483,7 +484,6 @@ sub citation_apa {
     	$parenthetical_details = "(Version $version)";
     }
     
-    # Print a standard citation
     my $author_line = "";
  
     if ( @authors ) {
@@ -525,8 +525,7 @@ sub citation_apa {
     return $citation;
 }
 
-# Format a citation string according to the Vancouver style -- unfinished, still mostly nature
-# Need to look at capturing a more complete pub date
+# Format a citation string according to the Vancouver style
 sub citation_vancouver {
     
 	my $cut = 6;  
@@ -537,7 +536,6 @@ sub citation_vancouver {
     my $current_year = $date[5] + 1900;
     my $current_date = "$date[3] $months[$date[4]] $current_year";
     
-    # Print a standard citation
     my $author_line = "";
  
     if ( @authors ) {
@@ -579,7 +577,6 @@ sub citation_copernicus {
 	my $cut = 100;       # defines length at which author lists are truncated with et al. 
     my $citation;
     
-    # Print a standard citation
     my $author_line = "";
  
     if ( @authors ) {
@@ -604,7 +601,7 @@ sub citation_copernicus {
         $title =~ s/\.$//; 
         $citation .= "$title, ";
     }
-    $citation .= "$publisher, " if $publisher;
+    $citation .= "$publisher [dataset], " if $publisher;
     $citation .= "<a href=\"$id\">$id</a>, " if $id;
     $citation .= "$year.";
     return $citation;
@@ -642,8 +639,6 @@ sub getRegistry {
 ############################
 # HTML writing subroutines #
 ############################
-
-# Collapsible text box based on https://alligator.io/css/collapsible/
 
 sub start_html {
     print <<EOF;
@@ -891,7 +886,7 @@ EOF
 
 sub make_results {
     
-	my $results = <<EOF;
+    my $results = <<EOF;
     
 <div class="results">
   <h3>Data citation information found via $source{name}:</h3>
@@ -904,15 +899,15 @@ sub make_results {
       
 EOF
 
-	my $citation = &citation_nature();
-	$results .= "<div id=\"nature\" class=\"tabcontent\"><p>$citation</p></div>\n";
-	$citation = &citation_copernicus();
-	$results .= "<div id=\"copernicus\" class=\"tabcontent\"><p>$citation</p></div>\n";
-	$citation = &citation_apa();
-	$results .= "<div id=\"apa\" class=\"tabcontent\"><p>$citation</p></div>\n";
-	$citation = &citation_vancouver();
-	$results .= "<div id=\"vancouver\" class=\"tabcontent\"><p>$citation</p></div>\n";
-
+    my $citation = &citation_nature();
+    $results .= "<div id=\"nature\" class=\"tabcontent\"><p>$citation</p></div>\n";
+    $citation = &citation_copernicus();
+    $results .= "<div id=\"copernicus\" class=\"tabcontent\"><p>$citation</p></div>\n";
+    $citation = &citation_apa();
+    $results .= "<div id=\"apa\" class=\"tabcontent\"><p>$citation</p></div>\n";
+    $citation = &citation_vancouver();
+    $results .= "<div id=\"vancouver\" class=\"tabcontent\"><p>$citation</p></div>\n";
+    
     $results .= <<EOF;
     
 </div>

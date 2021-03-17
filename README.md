@@ -12,7 +12,7 @@ The live version has a six hour cache. If you want to test for changes in metada
 ## citation styles
 The current version supports four citation styles. Links to descriptions of the styles are provided below. 
 * [Nature Research](https://www.nature.com/sdata/publish/submission-guidelines#refs)
-* [Copernicus](https://publications.copernicus.org/for_authors/manuscript_preparation.html)
+* [Copernicus](https://www.atmospheric-chemistry-and-physics.net/submission.html#references)
 * [APA](https://apastyle.apa.org/style-grammar-guidelines/references/examples/data-set-references) used by the AGU journals, among others
 * [Vancouver/ICMJE](https://www.nlm.nih.gov/bsd/uniform_requirements.html#electronic) used by the PLOS journals, among others
 
