@@ -167,9 +167,20 @@ sub do_work {
 
 sub makeAltProv {
     my %provs = %{$_[0]};
-    my $html = "<div class=\"results\"><h3>Other providers</h3><p>";
+    my $html = "<div class=\"results\">\n";
+   foreach my $provider ( keys %provs ) {
+        if ( $provider eq $prov ) {
+            my $repo_url = $q->url_encode( $repo );
+            $html .= "<h3>Current provider</h3><p><a href=\"$tool_url?DOI=&REPO=$repo_url&ACC=$acc\" class=\"provider\"><strong>x</strong> $provider</a></p>\n";
+        }   
+    }
+     
+    $html .= "<h3>Other providers</h3><p>\n";
     foreach my $provider ( keys %provs ) {
         my $repo_url = $q->url_encode( $repo );
+        if ( $provider eq $prov ) {
+            next;
+        }   
         $html .= "<a href=\"$tool_url?DOI=&REPO=$repo_url&ACC=$acc&PROV=$provider\" class=\"provider\">$provider</a>\n";
     }
     $html .= "</p></div>\n";
