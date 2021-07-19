@@ -1,7 +1,6 @@
-#!/Users/alhufton/perl5/perlbrew/perls/perl-5.32.1/bin/perl
+#!/bin/perl
 
-# use the shebang line below when running at bluehost
-#   !/usr/bin/perlml
+# use #!/usr/bin/perlml when run on bluehost server and comment local::lib
 
 ###########################
 # Data Citation Formatter #
@@ -17,11 +16,13 @@
 # 1. enter your $contact_email, to identify yourself to the CrossRef and DataCite APIs
 # 2. Configure the cache as needed for your system. See CHI documentation for details. 
 # 3. Check that the shebang line points at the right perl installation for your system
+# 4. Update the folder where local modules are stored, using local::lib
 ###########################
 
 use strict;
 use warnings;
 use utf8;
+use local::lib '/home/alhufton/perl5'; # modify as needed
 
 use CGI::Carp qw(fatalsToBrowser set_message);
 BEGIN {
@@ -60,14 +61,14 @@ my $prov = $q->param('PROV');
 my $prefer_schema = $q->param('prefer_schema');
 
 # Open the cache
-my $cache = CHI->new( driver => 'File' );
-# my $cache = CHI->new( driver => 'File', root_dir => '/home3/alhufton/tmp/data-citer' );
+# my $cache = CHI->new( driver => 'File' );
+my $cache = CHI->new( driver => 'File', root_dir => '/home3/alhufton/tmp/data-citer' );
 
 # Set various variables
 my $year = "????"; # defines default text for 'year' field
 my $contact_email = 'enter email address';
 my $timeout = 30;
-my $cache_time = '30';
+my $cache_time = 30;
 my $cache_time_registry = '1 month';
 my $json = JSON::MaybeXS->new->pretty;  # creates a json parsing object
 
@@ -166,10 +167,10 @@ sub do_work {
 }
 
 sub makeAltProv {
-    my %provs = %{$_[0]};
-    my $html = "<div class=\"results\">\n";
-   foreach my $provider ( keys %provs ) {
-        if ( $provider eq $prov ) {
+	my %provs = %{$_[0]};
+	my $html = "<div class=\"results\">\n";
+	foreach my $provider ( keys %provs ) {
+		if ( $provider eq $prov ) {
             my $repo_url = $q->url_encode( $repo );
             $html .= "<h3>Current provider</h3><p><a href=\"$tool_url?DOI=&REPO=$repo_url&ACC=$acc\" class=\"provider\"><strong>x</strong> $provider</a></p>\n";
         }   
@@ -195,7 +196,7 @@ sub get_doi_metadata {
     # Get DOI agency
     my $response = $ua->get("https://api.crossref.org/works/$doi/agency");
     if ($response->is_success) {
-        my $agency_message = $json->decode($response->content);
+    	my $agency_message = $json->decode($response->content);
         $agency = $agency_message->{message}->{agency}->{id};
     } else {
         print $response->status_line; &fail();
@@ -278,8 +279,9 @@ sub get_doi_metadata {
 # Get Schema.org metadata from a target URL
 sub get_html_metadata {
     my $url = shift;
-    
-    my $response = $ua->get($url);
+    my $req = HTTP::Request->new(GET => $url);
+    $req->header(Accept => 'text/html');    
+    my $response = $ua->request($req);
     my $html = $response->decoded_content;
     
     if ($response->is_success) {
@@ -292,15 +294,23 @@ sub get_html_metadata {
             # Identify linked data
             if ( $token->is_start_tag('script') && $token->get_attr('type') && $token->get_attr('type') eq 'application/ld+json') {
                 my $script = $p->get_token;
-                my $metadata = $json->decode($script->as_is); 
-                
-                if ( lc $metadata->{'@type'} eq 'dataset' || lc $metadata->{'@type'} eq 'datarecord' ) {
-                    unless ($i > 0)  { $use_metadata = $metadata }
-                    ++$i;
-                    
-                } elsif ( $metadata->{mainEntity} && (lc $metadata->{mainEntity}->{'@type'} eq 'dataset' || lc $metadata->{mainEntity}->{'@type'} eq 'datarecord' )) {
-                    unless ($i > 0)  { $use_metadata = $metadata->{mainEntity}; }
-                    ++$i;
+                my $metadata = $json->decode($script->as_is);
+                my @elements;
+ 
+                if ( ref $metadata eq 'ARRAY' ) {
+                	push @elements, @$metadata;
+                } else {
+                	push @elements, $metadata;
+                }
+
+                foreach my $element ( @elements ) {
+                	if ( lc $element->{'@type'} eq 'dataset' || lc $element->{'@type'} eq 'datarecord' ) {
+                		unless ($i > 0)  { $use_metadata = $element }
+                		++$i;
+					} elsif ( $element->{mainEntity} && (lc $element->{mainEntity}->{'@type'} eq 'dataset' || lc $element->{mainEntity}->{'@type'} eq 'datarecord' )) {
+						unless ($i > 0)  { $use_metadata = $element->{mainEntity}; }
+						++$i;
+					}
                 }
             }
         }        
@@ -386,7 +396,9 @@ sub parse_Schema_dataset {
     $title     = &assign( $metadata, 'name' );
     $publisher = &assign2( $metadata, 'publisher', 'name' );    
     unless ( $publisher ) { $publisher = &assign2( $metadata, 'publisher', 'legalName' ); }
-    $date      = &assign( $metadata, 'datePublished' );
+    $date      = &assign( $metadata, 'datePublished' ); 
+    unless ( $date ) { $date = &assign( $metadata, 'dateReleased' ) }
+    unless ( $date ) { $date = &assign( $metadata, 'dateCreated' ) }
     $version   = &assign( $metadata, 'version' );
     
     # probably an array but not always
@@ -643,7 +655,7 @@ sub getRegistry {
     	$cache->set('IDENTIFIERS-ORG-REGISTRY', \%registry, $cache_time_registry);
     	return %registry;
     } else {
-    	die "Failed to download identifiers.org registry";
+    	die "Failed to download identifiers.org registry:" . $response->status_line;
     }
 }
 
@@ -658,7 +670,7 @@ sub start_html {
 <title>Data Citation Formatter</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="../css/tool.css?awear">
+<link rel="stylesheet" href="../css/tool.css">
 </head>
 <body>
     
@@ -670,7 +682,7 @@ sub print_header {
     print <<EOF;
 <div class="header">
   <h1><a href="$tool_url">{data citation formatter}</a></h1>
-  <h4>Construct a formatted data citation from a <a href="https://www.doi.org/">DOI</a> or an <a href="identifiers.org/">identifiers.org</a> accession number</h4>
+  <h3>Construct a formatted data citation from a <a href="https://www.doi.org/">DOI</a> or an <a href="identifiers.org/">identifiers.org</a> accession number</h3>
 </div>
 EOF
     print_menu();
@@ -721,7 +733,7 @@ sub print_intro {
 <div class="intro">
 <a href="https://alhufton.com/building-data-citations-from-roadmap-compliant-metadata-sources/">Read the associated blog&nbsp;&#9656;</a>&nbsp;&nbsp;&nbsp;
 <a href="https://github.com/alhufton2/data-citer">Source code and methods&nbsp;&#9656;</a> 
-<p style="text-align:left"><strong>Try these examples:</strong> <a href="$tool_url?DOI=&REPO=PRIDE+Project&ACC=PXD001416&PROV=omicsdi">PXD001416 via OmicsDI</a>,
+<p style="text-align:left"><strong>Examples:</strong> <a href="$tool_url?DOI=&REPO=PRIDE+Project&ACC=PXD001416&PROV=omicsdi">PXD001416 via OmicsDI</a>,
 <a href="$tool_url?DOI=https%3A%2F%2Fdoi.org%2F10.14284%2F350&REPO=&ACC=">https://doi.org/10.14284/350</a> (DataCite), 
 <a href="$tool_url?DOI=10.1575%2F1912%2Fbco-dmo.804502.1&REPO=&ACC="> https://doi.org/10.1575/1912/bco-dmo.804502.1</a> (Crossref or Schema.org), 
 <a href="$tool_url?DOI=10.1594%2FPANGAEA.904761&prefer_schema=true&REPO=&ACC="> https://doi.org/10.1594/PANGAEA.904761</a> (DataCite or Schema.org),  
@@ -763,7 +775,7 @@ sub print_prompt {
 <form>
 <div class="row">
   <div class="column">
-    <h4>Enter a dataset DOI</h4>
+    <h3>Enter a dataset DOI</h3>
       <input type="text" name="DOI" $form_prefill{doi} size="30" maxlength="500">
       <nobr><input style="display:inline" type="checkbox" id="prefer_schema" name="prefer_schema" value="true" $form_prefill{prefer_schema}>
       <label for="prefer_schema">Prefer&nbsp;Schema.org</label></nobr>
@@ -771,7 +783,7 @@ sub print_prompt {
   </div> 
   
   <div class="column">
-    <h4>Or, enter an identifiers.org repository and accession</h4>
+    <h3>Or, enter an identifiers.org repository and accession</h3>
     <table>
       <tr><td>Repository:</td><td><div class="autocomplete"><input autocomplete="off" size="25" id="myRepos" type="text" name="REPO" $form_prefill{repo}></div></td></tr>
 	  <tr><td>Accession:</td><td><input type="text" size="25" name="ACC" $form_prefill{acc} maxlength="500"></td></tr>
