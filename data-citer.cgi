@@ -66,7 +66,7 @@ my $cache = CHI->new( driver => 'File', root_dir => '/home3/alhufton/tmp/data-ci
 
 # Set various variables
 my $year = "????"; # defines default text for 'year' field
-my $contact_email = 'enter email address';
+my $contact_email = 'ENTER EMAIL ADDRESS';
 my $timeout = 30;
 my $cache_time = 30;
 my $cache_time_registry = '1 month';
@@ -227,7 +227,7 @@ sub get_doi_metadata {
                 }
             }
     
-            $publisher       = $metadata->{publisher} if ( $metadata->{publisher} );
+            $publisher       = $metadata->{publisher}->{name} if ( $metadata->{publisher}->{name} );
             $version         = $metadata->{version} if ( $metadata->{version} );
             $title           = &assign2($metadata, 'titles', 'title'); 
             $year            = $metadata->{publicationYear} if ( $metadata->{publicationYear} );
@@ -483,8 +483,8 @@ sub citation_nature {
         }
     }
     if ( $title ) {
-        $title =~ s/\.$//; 
-        $citation .= "$title. ";
+    	$title .= "." unless ($title =~ /[.?]$/);
+        $citation .= "$title ";
     }
     $citation .= "<em>$publisher</em> " if $publisher;
     $citation .= "<a href=\"$id\">$id</a> " if $id;
@@ -670,7 +670,7 @@ sub start_html {
 <title>Data Citation Formatter</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="../css/tool.css">
+<link rel="stylesheet" href="https://alhufton.com/css/tool.css">
 </head>
 <body>
     
